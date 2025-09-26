@@ -27,8 +27,6 @@ var host = Host.CreateDefaultBuilder(args)
 
         services.AddSingleton<TelegramFileService>();
 
-        services.AddScoped<IQuizEngine, SimpleQuizEngine>();
-
         services.AddRouting(x =>
         {
             x.Command("start", x =>
@@ -70,6 +68,13 @@ var host = Host.CreateDefaultBuilder(args)
                 x.Use<BackPageHandler>();
                 x.Use<RenderQuizPageHandler>();
             });
+
+            x.When<QuizState>(x =>
+            {
+                x.Use<SkipQuestionMiddleware>();
+                x.Use<SelectNextQuizQuestionHandler>();
+                x.Use<RenderQuizQuestionHandler>();
+            }, (_, context) => context.Update.CallbackQuery?.Data is string s && s.StartsWith(Callback.QuizQuestionIdPrefix));
 
             x.When<StartSelectQuizState>(x =>
             {
@@ -133,7 +138,7 @@ var host = Host.CreateDefaultBuilder(args)
 using (var scope = host.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.EnsureDeletedAsync();
+    //await db.Database.EnsureDeletedAsync();
     await db.Database.EnsureCreatedAsync();
 }
 

@@ -5,6 +5,8 @@ internal class QuizState : State
     public Guid QuizId { get; set; }
     public Quiz Quiz { get; set; } = null!;
     public Guid? CurrentQuestionId { get; set; }
+    public int OrderNew { get; set; }
+    public int LastMessageId { get; set; }
     public List<UserQuizQuestion> Questions { get; set; } = []; 
 }
 internal class UserQuizQuestion

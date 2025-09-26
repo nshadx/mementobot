@@ -22,6 +22,10 @@ namespace repetitorbot
                 .HasValue<PublishSelectQuizState>("PublishSelectQuizState")
                 .HasValue<StartSelectQuizState>("StartSelectQuizState")
                 .HasValue<QuestionsSelectQuizState>("QuestionsSelectQuizState");
+            modelBuilder.Entity<QuizQuestion>()
+                .HasDiscriminator<string>("Type")
+                .HasValue<TextQuizQuestion>("TextQuizQuestion")
+                .HasValue<PollQuizQuestion>("PollQuizQuestion");
             modelBuilder.Entity<User>()
                 .HasOne(x => x.State)
                 .WithOne(x => x.User)

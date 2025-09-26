@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using repetitorbot.Entities.States;
 using Telegram.Bot;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace repetitorbot.Handlers;
 
@@ -17,14 +18,17 @@ internal class RenderQuizQuestionHandler(ITelegramBotClient client, AppDbContext
             return;
         }
 
-        var currentQustion = await dbContext.UserQuizQuestions
+        var currentQuestion = await dbContext.UserQuizQuestions
             .Include(x => x.QuizQuestion)
             .SingleAsync(x => x.Id == currentQuestionId);
 
-        await client.SendMessage(
+        var message = await client.SendMessage(
             chatId: context.Update.GetChatId(),
-            text: currentQustion.QuizQuestion.Question
+            text: currentQuestion.QuizQuestion.Question,
+            replyMarkup: new InlineKeyboardMarkup(new InlineKeyboardButton("Пропустить", $"quizQuestionId:{currentQuestionId.ToString()}"))
         );
+        
+        state.LastMessageId = message.Id;
         
         await next(context);
     }

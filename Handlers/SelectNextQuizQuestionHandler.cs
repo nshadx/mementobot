@@ -20,6 +20,11 @@ internal class SelectNextQuizQuestionHandler(AppDbContext dbContext) : IMiddlewa
             .OrderBy(x => x.Order)
             .FirstOrDefaultAsync();
 
+        if (currentQuestion is not null)
+        {
+            currentQuestion.Order = state.OrderNew;
+        }
+
         state.CurrentQuestionId = question?.Id;
 
         await next(context);

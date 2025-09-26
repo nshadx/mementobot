@@ -12,6 +12,7 @@ namespace repetitorbot.Handlers;
 internal class QuizQuestionDto
 {
     public string Question { get; set; } = null!;
+    public MatchAlgorithm Algorithm { get; set; }
     public List<string> CategoryNames { get; set; } = [];
 }
 internal class TextQuizQuestionDto : QuizQuestionDto
