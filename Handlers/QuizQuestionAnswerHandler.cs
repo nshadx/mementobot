@@ -37,7 +37,7 @@ internal class QuizQuestionAnswerHandler(
         }
 
         var question = await dbContext.UserQuizQuestions
-            .Include(x => x.QuizQuestion)
+            .Include(x => x.QuizQuestion).Include(userQuizQuestion => userQuizQuestion.ChosenMatches)
             .SingleAsync(x => x.Id == currentQuestionId);
 
         var orderNew = 0;
@@ -61,9 +61,9 @@ internal class QuizQuestionAnswerHandler(
                 score = Fuzz.Ratio(loweredUserAnswer, loweredCorrectAnswer);
                 orderNew = score switch
                 {
-                    100 when question.QuizQuestion.MatchAlgorithm is MatchAlgorithm.Exact => 0,
-                    >= 80 when question.QuizQuestion.MatchAlgorithm is MatchAlgorithm.Fuzzy => 0,
-                    >= 50 when question.QuizQuestion.MatchAlgorithm is MatchAlgorithm.Fuzzy => 5,
+                    100 => 0,
+                    >= 80 when textQuizQuestion.MatchAlgorithm is MatchAlgorithm.Fuzzy => 0,
+                    >= 50 when textQuizQuestion.MatchAlgorithm is MatchAlgorithm.Fuzzy => 5,
                     _ => 3
                 };
 
@@ -81,6 +81,19 @@ internal class QuizQuestionAnswerHandler(
                 
                 orderNew = answerCorrect ? 0 : 3;
                 score = answerCorrect ? 100 : -1;
+                
+                break;
+            case MatchQuizQuestion matchQuizQuestion:
+                var correctMatches = matchQuizQuestion.Matches;
+
+                var currentMatches = question.ChosenMatches;
+                
+                var answerCorrect2 = correctMatches.All(x => currentMatches.Select(x => (x.FromId, x.ToId)).Contains((x.FromId, x.ToId)));
+                
+                correctAnswer = string.Join(",\n", correctMatches.Select(x => $"{x.From.Value} -> {x.To.Value}"));
+                
+                orderNew = answerCorrect2 ? 0 : 3;
+                score = answerCorrect2 ? 100 : -1;
                 
                 break;
         }

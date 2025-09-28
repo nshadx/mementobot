@@ -9,14 +9,15 @@ namespace repetitorbot.Handlers;
 
 [JsonDerivedType(typeof(TextQuizQuestionDto), 0)]
 [JsonDerivedType(typeof(PollQuizQuestionDto), 1)]
+[JsonDerivedType(typeof(MatchQuizQuestionDto), 2)]
 internal class QuizQuestionDto
 {
     public string Question { get; set; } = null!;
-    public MatchAlgorithm Algorithm { get; set; }
     public List<string> CategoryNames { get; set; } = [];
 }
 internal class TextQuizQuestionDto : QuizQuestionDto
 {
+    public MatchAlgorithm Algorithm { get; set; }
     public string Answer { get; set; } = null!;
 }
 internal class PollQuizQuestionDto : QuizQuestionDto
@@ -27,6 +28,19 @@ internal class PollQuizQuestionVariantDto
 {
     public string Value { get; set; } = null!;
     public bool IsCorrect { get; set; }
+}
+internal class MatchQuizQuestionDto : QuizQuestionDto
+{
+    public List<MatchDto> Matches { get; set; } = [];
+}
+internal class MatchDto
+{
+    public MatchOptionDto From { get; set; } = null!;
+    public MatchOptionDto To { get; set; } = null!;
+}
+internal class MatchOptionDto
+{
+    public string Value { get; set; } = null!;
 }
 internal class QuizDto
 {
@@ -90,8 +104,9 @@ internal class ImportQuizHandler(ITelegramBotClient client, TelegramFileService 
             {
                 Question = text.Question,
                 Categories = categories,
-                Answer = text.Answer,
-                Order = order
+                Order = order,
+                MatchAlgorithm = text.Algorithm,
+                Answer = text.Answer
             },
             PollQuizQuestionDto poll => new PollQuizQuestion()
             {
@@ -99,6 +114,13 @@ internal class ImportQuizHandler(ITelegramBotClient client, TelegramFileService 
                 Categories = categories,
                 Order = order,
                 Variants = [.. poll.Variants.Select(x => new PollQuestionVariant() { IsCorrect = x.IsCorrect, Value = x.Value })]
+            },
+            MatchQuizQuestionDto match => new MatchQuizQuestion()
+            {
+                Question = match.Question,
+                Categories = categories,
+                Order = order,
+                Matches = [.. match.Matches.Select(x => new Match() { From = new() { Value = x.From.Value }, To = new() { Value = x.To.Value }})] 
             },
             _ => throw new InvalidOperationException("not supported")
         };

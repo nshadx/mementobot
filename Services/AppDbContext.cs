@@ -25,7 +25,12 @@ namespace repetitorbot
             modelBuilder.Entity<QuizQuestion>()
                 .HasDiscriminator<string>("Type")
                 .HasValue<TextQuizQuestion>("TextQuizQuestion")
-                .HasValue<PollQuizQuestion>("PollQuizQuestion");
+                .HasValue<PollQuizQuestion>("PollQuizQuestion")
+                .HasValue<MatchQuizQuestion>("MatchQuizQuestion");
+            modelBuilder.Entity<Match>()
+                .HasKey(x => new { x.FromId, x.ToId });
+            modelBuilder.Entity<UserSelectedMatch>()
+                .HasKey(x => new { x.FromId, x.ToId });
             modelBuilder.Entity<User>()
                 .HasOne(x => x.State)
                 .WithOne(x => x.User)

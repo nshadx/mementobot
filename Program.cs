@@ -113,6 +113,14 @@ var host = Host.CreateDefaultBuilder(args)
 
             x.When<QuizState>(x =>
             {
+                x.Use<SelectMatchHandler>();
+                x.Use<RenderNextMatchHandler>();
+                x.Use<QuizQuestionAnswerHandler>();
+                x.Use<SelectNextQuizQuestionHandler>();
+                x.Use<RenderNextQuizQuestionHandler>();
+            }, (_, context) => context.Update.CallbackQuery?.Data is string s && s.StartsWith(Callback.MatchIdPrefix));
+            x.When<QuizState>(x =>
+            {
                 x.Use<SelectPollVariantHandler>();
             }, (_, context) => context.Update.CallbackQuery?.Data is string s && s.StartsWith(Callback.PollVariantIdPrefix));
             x.When<QuizState>(x =>

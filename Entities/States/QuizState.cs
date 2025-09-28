@@ -18,4 +18,15 @@ internal class UserQuizQuestion
     public QuizQuestion QuizQuestion { get; set; } = null!;
     public int Order { get; set; }
     public List<Guid> ChosenVariants { get; set; } = [];
+    public List<UserSelectedMatch> ChosenMatches { get; set; } = [];
+}
+
+internal class UserSelectedMatch
+{
+    public Guid UserQuizQuestionId { get; set; }
+    public UserQuizQuestion UserQuizQuestion { get; set; } = null!;
+    public int FromId { get; set; }
+    public MatchOption From { get; set; } = null!;
+    public int ToId { get; set; }
+    public MatchOption To { get; set; } = null!;
 }

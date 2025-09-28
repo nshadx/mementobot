@@ -22,7 +22,6 @@
         public Quiz Quiz { get; set; } = null!;
         public string Question { get; set; } = null!;
         public int Order { get; set; }
-        public MatchAlgorithm MatchAlgorithm { get; set; }
         public List<QuizQuestionCategoryLink> Categories { get; set; } = [];
     }
     internal class QuizQuestionCategoryLink
@@ -38,14 +37,15 @@
         public string Name { get; set; } = null!;
         public List<QuizQuestionCategoryLink> Questions { get; set; } = [];
     }
+    internal class TextQuizQuestion : QuizQuestion
+    {
+        public MatchAlgorithm MatchAlgorithm { get; set; }
+        public string Answer { get; set; } = null!;
+    }
     internal enum MatchAlgorithm
     {
         Fuzzy,
         Exact
-    }
-    internal class TextQuizQuestion : QuizQuestion
-    {
-        public string Answer { get; set; } = null!;
     }
     internal class PollQuizQuestion : QuizQuestion
     {
@@ -57,6 +57,22 @@
         public Guid PollQuizQuestionId { get; set; }
         public PollQuizQuestion PollQuizQuestion { get; set; } = null!;
         public bool IsCorrect { get; set; }
+        public string Value { get; set; } = null!;
+    }
+    internal class MatchQuizQuestion : QuizQuestion
+    {
+        public List<Match> Matches { get; set; } = [];
+    }
+    internal class Match
+    {
+        public int FromId { get; set; }
+        public MatchOption From { get; set; } = null!;
+        public int ToId { get; set; }
+        public MatchOption To { get; set; } = null!;
+    }
+    internal class MatchOption
+    {
+        public int Id { get; set; }
         public string Value { get; set; } = null!;
     }
 }

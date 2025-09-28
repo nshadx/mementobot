@@ -1,21 +1,22 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using repetitorbot.Constants;
 using repetitorbot.Entities.States;
 
 namespace repetitorbot.Handlers;
 
-internal class SelectPollVariantHandler(
+internal class SelectMatchHandler(
     AppDbContext dbContext
 ) : IMiddleware
 {
     public async Task Invoke(Context context, UpdateDelegate next)
     {
-        if (context.Update.CallbackQuery is not { Data: string variant })
+        if (context.Update.CallbackQuery is not { Data: string match })
         {
             return;
         }
 
-        if (!Guid.TryParse(variant.AsSpan()[Callback.PollVariantIdPrefix.Length..], out var variantId))
+        //todo: matchId: starts with
+        var parts = match.Split(';');
+        if (!int.TryParse(parts[0].Split(':')[1], out var fromId) || !int.TryParse(parts[1].Split(':')[1], out var toId))
         {
             return;
         }
@@ -26,8 +27,12 @@ internal class SelectPollVariantHandler(
         }
         
         var currentQuestion = await dbContext.UserQuizQuestions.SingleAsync(x => x.Id == currentQuestionId);
-        
-        currentQuestion.ChosenVariants.Add(variantId);
+
+        currentQuestion.ChosenMatches.Add(new UserSelectedMatch()
+        {
+            FromId = fromId,
+            ToId = toId
+        });
         
         await next(context);
     }
