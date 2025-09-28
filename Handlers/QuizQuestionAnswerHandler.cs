@@ -13,18 +13,36 @@ internal class QuizQuestionAnswerHandler(
     ITelegramBotClient client
 ) : IMiddleware
 {
+    private readonly Template _responseTemplate = Template.Parse("""
+                                                                 Вы ответили: {{
+                                                                 if score > 80
+                                                                     "отлично! 🎉"
+                                                                 else if score > 50 && score < 80
+                                                                     $"неплохо, но нужно стараться, вы набрали {score}%. Вопрос будет повторен через {repeat_time}"
+                                                                 else 
+                                                                     $"очень плохо! Вопрос будет повторен через {repeat_time}"
+                                                                 end
+                                                                 }}
+
+                                                                 Правильный ответ:
+
+                                                                 `{{correct_answer}}`
+                                                                 """);
+
     public async Task Invoke(Context context, UpdateDelegate next)
     {
         if (context.State is not QuizState { CurrentQuestionId: Guid currentQuestionId } state)
         {
             return;
         }
-        
+
         var question = await dbContext.UserQuizQuestions
             .Include(x => x.QuizQuestion)
             .SingleAsync(x => x.Id == currentQuestionId);
 
         var orderNew = 0;
+        var score = 0;
+        string correctAnswer = null!;
         switch (question.QuizQuestion)
         {
             case TextQuizQuestion textQuizQuestion:
@@ -34,45 +52,53 @@ internal class QuizQuestionAnswerHandler(
                 }
 
                 var trimmedUserAnswer = text.Trim('.', ';', ' ');
-                var correctAnswer = textQuizQuestion.Answer;
-                
+
+                correctAnswer = textQuizQuestion.Answer;
+
                 var loweredCorrectAnswer = correctAnswer.ToLower();
                 var loweredUserAnswer = trimmedUserAnswer.ToLower();
-                        
-                var score = Fuzz.Ratio(loweredUserAnswer, loweredCorrectAnswer);
-                        
-                (orderNew, var message) = score switch
+
+                score = Fuzz.Ratio(loweredUserAnswer, loweredCorrectAnswer);
+                orderNew = score switch
                 {
-                    100 when question.QuizQuestion.MatchAlgorithm is MatchAlgorithm.Exact => (0, "отлично! 🎉"),
-                    >= 80 when question.QuizQuestion.MatchAlgorithm is MatchAlgorithm.Fuzzy => (0, "отлично! 🎉"),
-                    >= 50 when question.QuizQuestion.MatchAlgorithm is MatchAlgorithm.Fuzzy => (5, "неплохо, результат {{percent}}. Вопрос будет повторен через 5 ⏳"),
-                    _ => (3, "❌ очень плохо 😢 Вопрос будет повторен через 3 ⏳")
+                    100 when question.QuizQuestion.MatchAlgorithm is MatchAlgorithm.Exact => 0,
+                    >= 80 when question.QuizQuestion.MatchAlgorithm is MatchAlgorithm.Fuzzy => 0,
+                    >= 50 when question.QuizQuestion.MatchAlgorithm is MatchAlgorithm.Fuzzy => 5,
+                    _ => 3
                 };
 
-                var template = Template.Parse(
-                    $"Вы ответили: {message}\n\n" +
-                    "Правильный ответ:\n\n" +
-                    "`{{answer}}`"
-                );
-
-                var messageText = await template.RenderAsync(new
-                {
-                    Score = message,
-                    Answer = correctAnswer,
-                    Percent = $"{score}%"
-                });
-
-                await client.SendMessage(
-                    chatId: context.Update.GetChatId(),
-                    text: messageText,
-                    ParseMode.Markdown
-                );
                 break;
             case PollQuizQuestion pollQuizQuestion:
-                throw new NotImplementedException();
-        }
+                var correctVariants = pollQuizQuestion.Variants
+                    .Where(x => x.IsCorrect)
+                    .ToList();
 
+                var correctVariantIds = correctVariants.Select(x => x.Id).ToHashSet();
+                
+                correctAnswer = string.Join('\n', correctVariants.Select(x => x.Value));
+                
+                var answerCorrect = question.ChosenVariants.All(x => correctVariantIds.Contains(x));
+                
+                orderNew = answerCorrect ? 0 : 3;
+                score = answerCorrect ? 100 : -1;
+                
+                break;
+        }
+        
         state.OrderNew = question.Order + orderNew;
+
+        var messageText = await _responseTemplate.RenderAsync(new
+        {
+            Score = score,
+            CorrectAnswer = correctAnswer,
+            RepeatTime = orderNew
+        });
+
+        await client.SendMessage(
+            chatId: context.Update.GetChatId(),
+            text: messageText,
+            ParseMode.Markdown
+        );
 
         await next(context);
     }

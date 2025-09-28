@@ -17,4 +17,5 @@ internal class UserQuizQuestion
     public Guid QuizQuestionId { get; set; }
     public QuizQuestion QuizQuestion { get; set; } = null!;
     public int Order { get; set; }
+    public List<Guid> ChosenVariants { get; set; } = [];
 }

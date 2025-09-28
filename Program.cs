@@ -73,7 +73,7 @@ var host = Host.CreateDefaultBuilder(args)
             {
                 x.Use<SkipQuestionMiddleware>();
                 x.Use<SelectNextQuizQuestionHandler>();
-                x.Use<RenderQuizQuestionHandler>();
+                x.Use<RenderNextQuizQuestionHandler>();
             }, (_, context) => context.Update.CallbackQuery?.Data is string s && s.StartsWith(Callback.QuizQuestionIdPrefix));
 
             x.When<StartSelectQuizState>(x =>
@@ -81,7 +81,7 @@ var host = Host.CreateDefaultBuilder(args)
                 x.Use<SelectQuizForStartingHandler>();
                 x.Use<SetQuizQuestionsHandler>();
                 x.Use<SelectNextQuizQuestionHandler>();
-                x.Use<RenderQuizQuestionHandler>();
+                x.Use<RenderNextQuizQuestionHandler>();
             }, (_, context) => context.Update.CallbackQuery?.Data is string s && s.StartsWith(Callback.QuizIdPrefix));
 
             x.When<PublishSelectQuizState>(x =>
@@ -113,9 +113,19 @@ var host = Host.CreateDefaultBuilder(args)
 
             x.When<QuizState>(x =>
             {
+                x.Use<SelectPollVariantHandler>();
+            }, (_, context) => context.Update.CallbackQuery?.Data is string s && s.StartsWith(Callback.PollVariantIdPrefix));
+            x.When<QuizState>(x =>
+            {
                 x.Use<QuizQuestionAnswerHandler>();
                 x.Use<SelectNextQuizQuestionHandler>();
-                x.Use<RenderQuizQuestionHandler>();
+                x.Use<RenderNextQuizQuestionHandler>();
+            }, (_, context) => context.Update.CallbackQuery?.Data == Callback.PollSubmit);
+            x.When<QuizState>(x =>
+            {
+                x.Use<QuizQuestionAnswerHandler>();
+                x.Use<SelectNextQuizQuestionHandler>();
+                x.Use<RenderNextQuizQuestionHandler>();
             });
 
             x.When<CreateQuizState>(x =>
