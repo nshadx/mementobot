@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using repetitorbot.Handlers;
 
-namespace repetitorbot.Services;
+namespace mementobot.Services.Common;
 
 internal class PipelineBuilder(IServiceCollection services, string? serviceKey = null)
 {

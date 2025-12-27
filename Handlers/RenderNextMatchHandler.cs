@@ -1,11 +1,14 @@
-﻿using Microsoft.EntityFrameworkCore;
-using repetitorbot.Constants;
-using repetitorbot.Entities;
-using repetitorbot.Entities.States;
+﻿using mementobot.Constants;
+using mementobot.Entities;
+using mementobot.Entities.States;
+using mementobot.Extensions;
+using mementobot.Services;
+using mementobot.Services.Common;
+using Microsoft.EntityFrameworkCore;
 using Telegram.Bot;
 using Telegram.Bot.Types.ReplyMarkups;
 
-namespace repetitorbot.Handlers;
+namespace mementobot.Handlers;
 
 internal class RenderNextMatchHandler(
     AppDbContext dbContext,

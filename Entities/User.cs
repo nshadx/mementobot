@@ -1,6 +1,6 @@
-﻿using repetitorbot.Entities.States;
+﻿using mementobot.Entities.States;
 
-namespace repetitorbot.Entities
+namespace mementobot.Entities
 {
     internal class User
     {

@@ -1,4 +1,4 @@
-﻿namespace repetitorbot.Entities
+﻿namespace mementobot.Entities
 {
     internal class Quiz
     {

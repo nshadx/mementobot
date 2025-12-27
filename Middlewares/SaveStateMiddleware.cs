@@ -1,7 +1,8 @@
+using mementobot.Services;
+using mementobot.Services.Common;
 using Microsoft.EntityFrameworkCore;
-using repetitorbot.Handlers;
 
-namespace repetitorbot.Middlewares;
+namespace mementobot.Middlewares;
 
 internal class SaveStateMiddleware(AppDbContext dbContext) : IMiddleware
 {

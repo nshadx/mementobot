@@ -1,4 +1,4 @@
-namespace repetitorbot.Entities.States;
+namespace mementobot.Entities.States;
 
 internal class SelectQuizState : State
 {

@@ -1,7 +1,6 @@
-using repetitorbot.Handlers;
-using repetitorbot.Services;
+using mementobot.Services.Common;
 
-namespace repetitorbot.Middlewares;
+namespace mementobot.Middlewares;
 
 internal delegate Task<bool> Route(IServiceProvider serviceProvider, Context context);
 internal class RouterMiddleware(IServiceProvider provider, IEnumerable<Route> routes) : IMiddleware

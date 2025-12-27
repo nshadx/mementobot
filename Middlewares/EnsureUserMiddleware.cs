@@ -1,6 +1,8 @@
-using repetitorbot.Handlers;
+using mementobot.Extensions;
+using mementobot.Services;
+using mementobot.Services.Common;
 
-namespace repetitorbot.Middlewares;
+namespace mementobot.Middlewares;
 
 internal class EnsureUserMiddleware(AppDbContext dbContext) : IMiddleware
 {

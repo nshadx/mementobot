@@ -1,8 +1,8 @@
-using repetitorbot.Entities.States;
+using mementobot.Entities.States;
 using Telegram.Bot.Types;
-using User = repetitorbot.Entities.User;
+using User = mementobot.Entities.User;
 
-namespace repetitorbot.Handlers;
+namespace mementobot.Services.Common;
 
 internal record Context(Update Update)
 {

@@ -1,9 +1,9 @@
-﻿using repetitorbot.Handlers;
+﻿using mementobot.Services.Common;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 
-namespace repetitorbot
+namespace mementobot.Services
 {
     internal class UpdateHandler(UpdateDelegate pipeline) : IUpdateHandler
     {

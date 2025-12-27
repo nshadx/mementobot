@@ -1,7 +1,7 @@
-using repetitorbot.Middlewares;
-using repetitorbot.Services;
+using mementobot.Middlewares;
+using mementobot.Services.Common;
 
-namespace repetitorbot.Extensions;
+namespace mementobot.Extensions;
 
 internal static class PipelineExtensions
 {

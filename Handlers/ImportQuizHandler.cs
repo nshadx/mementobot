@@ -1,11 +1,13 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using mementobot.Entities;
+using mementobot.Extensions;
+using mementobot.Services;
+using mementobot.Services.Common;
 using Microsoft.EntityFrameworkCore;
-using repetitorbot.Entities;
-using repetitorbot.Services.Common;
 using Telegram.Bot;
 
-namespace repetitorbot.Handlers;
+namespace mementobot.Handlers;
 
 [JsonDerivedType(typeof(TextQuizQuestionDto), 0)]
 [JsonDerivedType(typeof(PollQuizQuestionDto), 1)]

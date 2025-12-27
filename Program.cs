@@ -1,12 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
-using repetitorbot;
-using repetitorbot.Constants;
-using repetitorbot.Entities.States;
-using repetitorbot.Extensions;
-using repetitorbot.Handlers;
-using repetitorbot.Middlewares;
-using repetitorbot.Services;
-using repetitorbot.Services.Common;
+﻿using mementobot.Constants;
+using mementobot.Entities.States;
+using mementobot.Extensions;
+using mementobot.Handlers;
+using mementobot.Middlewares;
+using mementobot.Services;
+using mementobot.Services.Common;
+using Microsoft.EntityFrameworkCore;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 

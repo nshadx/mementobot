@@ -1,12 +1,15 @@
 using FuzzySharp;
+using mementobot.Entities;
+using mementobot.Entities.States;
+using mementobot.Extensions;
+using mementobot.Services;
+using mementobot.Services.Common;
 using Microsoft.EntityFrameworkCore;
-using repetitorbot.Entities;
-using repetitorbot.Entities.States;
 using Scriban;
 using Telegram.Bot;
 using Telegram.Bot.Types.Enums;
 
-namespace repetitorbot.Handlers;
+namespace mementobot.Handlers;
 
 internal class QuizQuestionAnswerHandler(
     AppDbContext dbContext,

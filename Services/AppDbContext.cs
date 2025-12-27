@@ -1,8 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
-using repetitorbot.Entities;
-using repetitorbot.Entities.States;
+﻿using mementobot.Entities;
+using mementobot.Entities.States;
+using Microsoft.EntityFrameworkCore;
 
-namespace repetitorbot
+namespace mementobot.Services
 {
     internal class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
     {

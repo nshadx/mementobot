@@ -1,8 +1,11 @@
-using repetitorbot.Entities;
-using repetitorbot.Entities.States;
+using mementobot.Entities;
+using mementobot.Entities.States;
+using mementobot.Extensions;
+using mementobot.Services;
+using mementobot.Services.Common;
 using Telegram.Bot;
 
-namespace repetitorbot.Handlers;
+namespace mementobot.Handlers;
 
 internal class SetQuizQuestionTypeHandler(ITelegramBotClient client) : IMiddleware
 {

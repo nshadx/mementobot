@@ -1,11 +1,12 @@
-
-using repetitorbot.Constants;
-using repetitorbot.Entities.States;
+using mementobot.Constants;
+using mementobot.Entities.States;
+using mementobot.Extensions;
+using mementobot.Services.Common;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 
-namespace repetitorbot.Handlers;
+namespace mementobot.Handlers;
 
 internal class RenderNextQuestionPropertyToFillHandler(ITelegramBotClient client) : IMiddleware
 {

@@ -1,4 +1,4 @@
-namespace repetitorbot.Constants;
+namespace mementobot.Constants;
 
 public static class Callback
 {

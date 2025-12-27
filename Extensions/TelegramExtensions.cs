@@ -1,6 +1,6 @@
 ﻿using Telegram.Bot.Types;
 
-namespace repetitorbot
+namespace mementobot.Extensions
 {
     internal static class TelegramExtensions
     {

@@ -1,8 +1,10 @@
-using repetitorbot.Constants;
-using repetitorbot.Entities.States;
+using mementobot.Constants;
+using mementobot.Entities.States;
+using mementobot.Extensions;
+using mementobot.Services.Common;
 using Telegram.Bot;
 
-namespace repetitorbot.Handlers;
+namespace mementobot.Handlers;
 
 internal class SkipQuestionMiddleware(
     ITelegramBotClient client

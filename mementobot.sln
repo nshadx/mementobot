@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36408.4 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "repetitorbot", "repetitorbot.csproj", "{46C8E910-55CA-40D9-BB62-1F8C82D5B86A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mementobot", "mementobot.csproj", "{46C8E910-55CA-40D9-BB62-1F8C82D5B86A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UserSecretsId>adaf22db-1f60-4439-8ce0-9c68f38df179</UserSecretsId>
+    <RootNamespace>mementobot</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

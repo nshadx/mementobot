@@ -1,7 +1,7 @@
-using repetitorbot.Handlers;
+using mementobot.Services.Common;
 using Telegram.Bot;
 
-namespace repetitorbot.Middlewares;
+namespace mementobot.Middlewares;
 
 internal class AnswerCallbackQueryMiddleware(ITelegramBotClient client) : IMiddleware
 {
