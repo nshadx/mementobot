@@ -1,9 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using mementobot.Entities;
-using mementobot.Extensions;
+using mementobot.Middlewares;
 using mementobot.Services;
-using mementobot.Services.Common;
+using mementobot.Telegram;
 using Microsoft.EntityFrameworkCore;
 using Telegram.Bot;
 

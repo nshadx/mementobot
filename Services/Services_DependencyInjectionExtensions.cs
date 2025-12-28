@@ -2,7 +2,7 @@
 
 namespace mementobot.Services;
 
-public static class Services_DependencyInjectionExtensions
+internal static class Services_DependencyInjectionExtensions
 {
     public static IServiceCollection AddAppDbContext(
         this IServiceCollection services,

@@ -1,6 +1,6 @@
 using Telegram.Bot;
 
-namespace mementobot.Services.Common;
+namespace mementobot.Telegram;
 
 public class TelegramFileService(ITelegramBotClient client)
 {

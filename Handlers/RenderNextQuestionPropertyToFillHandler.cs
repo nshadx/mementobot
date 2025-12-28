@@ -1,7 +1,7 @@
 using mementobot.Constants;
 using mementobot.Entities.States;
-using mementobot.Extensions;
-using mementobot.Services.Common;
+using mementobot.Middlewares;
+using mementobot.Telegram;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;

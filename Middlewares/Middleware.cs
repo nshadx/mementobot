@@ -2,7 +2,7 @@ using mementobot.Entities.States;
 using Telegram.Bot.Types;
 using User = mementobot.Entities.User;
 
-namespace mementobot.Services.Common;
+namespace mementobot.Middlewares;
 
 internal record Context(Update Update)
 {

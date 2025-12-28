@@ -1,9 +1,9 @@
-﻿using mementobot.Services.Common;
+﻿using mementobot.Middlewares;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 
-namespace mementobot.Services
+namespace mementobot.Telegram
 {
     internal class UpdateHandler(UpdateDelegate pipeline) : IUpdateHandler
     {

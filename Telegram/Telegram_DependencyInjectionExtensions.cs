@@ -1,5 +1,4 @@
 ﻿using mementobot.Services;
-using mementobot.Services.Common;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 

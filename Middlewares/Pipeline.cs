@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace mementobot.Services.Common;
+namespace mementobot.Middlewares;
 
 internal class PipelineBuilder(IServiceCollection services, string? serviceKey = null)
 {

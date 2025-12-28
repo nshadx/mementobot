@@ -1,4 +1,5 @@
-﻿using mementobot.Handlers;
+﻿using mementobot;
+using mementobot.Middlewares;
 using mementobot.Services;
 using mementobot.Telegram;
 

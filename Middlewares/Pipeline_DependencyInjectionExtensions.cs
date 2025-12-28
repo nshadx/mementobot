@@ -1,10 +1,18 @@
-﻿using mementobot.Extensions;
-using mementobot.Middlewares;
+namespace mementobot.Middlewares;
 
-namespace mementobot.Handlers;
-
-public static class Pipeline_DependencyInjectionExtensions
+internal static class Pipeline_DependencyInjectionExtensions
 {
+    public static IServiceCollection AddPipeline(this IServiceCollection services, Action<PipelineBuilder> configure)
+    {
+        PipelineBuilder instance = new(services);
+
+        configure(instance);
+
+        instance.Build();
+
+        return services;
+    }
+    
     public static IServiceCollection AddAppPipeline(this IServiceCollection services)
     {
         services.AddPipeline(x =>

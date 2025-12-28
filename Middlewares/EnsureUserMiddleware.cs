@@ -1,6 +1,5 @@
-using mementobot.Extensions;
 using mementobot.Services;
-using mementobot.Services.Common;
+using mementobot.Telegram;
 
 namespace mementobot.Middlewares;
 

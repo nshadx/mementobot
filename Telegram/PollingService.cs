@@ -1,7 +1,7 @@
 ﻿using Telegram.Bot;
 using Telegram.Bot.Polling;
 
-namespace mementobot.Services
+namespace mementobot.Telegram
 {
     internal class PollingService(ITelegramBotClient client, IServiceProvider serviceProvider) : BackgroundService
     {

@@ -1,8 +1,8 @@
 using mementobot.Entities;
 using mementobot.Entities.States;
-using mementobot.Extensions;
+using mementobot.Middlewares;
 using mementobot.Services;
-using mementobot.Services.Common;
+using mementobot.Telegram;
 using Telegram.Bot;
 
 namespace mementobot.Handlers;

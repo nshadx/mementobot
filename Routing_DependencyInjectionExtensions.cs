@@ -1,11 +1,23 @@
 ﻿using mementobot.Constants;
 using mementobot.Entities.States;
-using mementobot.Extensions;
+using mementobot.Handlers;
+using mementobot.Middlewares;
 
-namespace mementobot.Handlers;
+namespace mementobot;
 
-public static class Routing_DependencyInjectionExtensions
+internal static class Routing_DependencyInjectionExtensions
 {
+    public static IServiceCollection AddRouting(this IServiceCollection services, Action<RouteBuilder> configure)
+    {
+        RouteBuilder instance = new(services);
+
+        configure(instance);
+
+        instance.Build();
+
+        return services;
+    }
+
     public static IServiceCollection RouteCommands(this IServiceCollection services)
     {
         services.AddRouting(builder =>

@@ -1,6 +1,6 @@
 ﻿using Telegram.Bot.Types;
 
-namespace mementobot.Extensions
+namespace mementobot.Telegram
 {
     internal static class TelegramExtensions
     {
