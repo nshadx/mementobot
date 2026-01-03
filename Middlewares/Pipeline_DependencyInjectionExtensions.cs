@@ -13,9 +13,9 @@ internal static class Pipeline_DependencyInjectionExtensions
         return services;
     }
     
-    public static IServiceCollection AddAppPipeline(this IServiceCollection services)
+    public static IHostApplicationBuilder AddAppPipeline(this IHostApplicationBuilder builder)
     {
-        services.AddPipeline(x =>
+        builder.Services.AddPipeline(x =>
         {
             x.Use<EnsureUserMiddleware>();
             x.Use<SetStateMiddleware>();
@@ -24,6 +24,6 @@ internal static class Pipeline_DependencyInjectionExtensions
             x.Use<AnswerCallbackQueryMiddleware>();
         });
 
-        return services;
+        return builder;
     }
 }

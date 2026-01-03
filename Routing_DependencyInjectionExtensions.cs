@@ -18,9 +18,9 @@ internal static class Routing_DependencyInjectionExtensions
         return services;
     }
 
-    public static IServiceCollection RouteCommands(this IServiceCollection services)
+    public static IHostApplicationBuilder RouteCommands(this IHostApplicationBuilder builder)
     {
-        services.AddRouting(builder =>
+        builder.Services.AddRouting(builder =>
         {
             builder.Command("start", builder =>
             {
@@ -46,12 +46,12 @@ internal static class Routing_DependencyInjectionExtensions
             });
         });
         
-        return services;
+        return builder;
     }
     
-    public static IServiceCollection RouteCallbacks(this IServiceCollection services)
+    public static IHostApplicationBuilder RouteCallbacks(this IHostApplicationBuilder builder)
     {
-        services.AddRouting(builder =>
+        builder.Services.AddRouting(builder =>
         {
             builder.Callback(builder => builder is Callback.ForwardPage, builder =>
             {
@@ -66,12 +66,12 @@ internal static class Routing_DependencyInjectionExtensions
             });
         });
         
-        return services;
+        return builder;
     }
     
-    public static IServiceCollection RouteFiles(this IServiceCollection services)
+    public static IHostApplicationBuilder RouteFiles(this IHostApplicationBuilder builder)
     {
-        services.AddRouting(builder =>
+        builder.Services.AddRouting(builder =>
         {
             builder.File("json", builder =>
             {
@@ -79,12 +79,12 @@ internal static class Routing_DependencyInjectionExtensions
             });
         });
         
-        return services;
+        return builder;
     }
     
-    public static IServiceCollection RouteStates(this IServiceCollection services)
+    public static IHostApplicationBuilder RouteStates(this IHostApplicationBuilder builder)
     {
-        services.AddRouting(builder =>
+        builder.Services.AddRouting(builder =>
         {
             builder.When<QuizState>(builder =>
             {
@@ -159,6 +159,6 @@ internal static class Routing_DependencyInjectionExtensions
             }, (x, _) => x.Quiz.Name is null);
         });
         
-        return services;
+        return builder;
     }
 }

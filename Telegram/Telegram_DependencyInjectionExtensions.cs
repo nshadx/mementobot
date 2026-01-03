@@ -1,23 +1,21 @@
-﻿using mementobot.Services;
-using Telegram.Bot;
+﻿using Telegram.Bot;
 using Telegram.Bot.Polling;
 
 namespace mementobot.Telegram;
 
 public static class Telegram_DependencyInjectionExtensions
 {
-    public static IServiceCollection AddTelegram(
-        this IServiceCollection services,
-        IConfiguration configuration
+    public static IHostApplicationBuilder AddTelegram(
+        this IHostApplicationBuilder builder
     )
     {
-        services.AddHttpClient("TelegramBotClient")
+        builder.Services.AddHttpClient("TelegramBotClient")
             .RemoveAllLoggers()
-            .AddTypedClient<ITelegramBotClient>((httpClient, _) => new TelegramBotClient(configuration.GetConnectionString("TelegramBotToken") ?? throw new InvalidOperationException("empty bot token"), httpClient));
-        services.AddHostedService<PollingService>();
-        services.AddScoped<IUpdateHandler, UpdateHandler>();
-        services.AddSingleton<TelegramFileService>();
+            .AddTypedClient<ITelegramBotClient>((httpClient, _) => new TelegramBotClient(builder.Configuration.GetConnectionString("TelegramBotToken") ?? throw new InvalidOperationException("empty bot token"), httpClient));
+        builder.Services.AddHostedService<PollingService>();
+        builder.Services.AddScoped<IUpdateHandler, UpdateHandler>();
+        builder.Services.AddSingleton<TelegramFileService>();
 
-        return services;
+        return builder;
     }
 }

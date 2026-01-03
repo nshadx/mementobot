@@ -4,16 +4,15 @@ namespace mementobot.Services;
 
 internal static class Services_DependencyInjectionExtensions
 {
-    public static IServiceCollection AddAppDbContext(
-        this IServiceCollection services,
-        IConfiguration configuration
+    public static IHostApplicationBuilder AddAppDbContext(
+        this IHostApplicationBuilder builder
     )
     {
-        services.AddDbContext<AppDbContext>(options =>
+        builder.Services.AddDbContext<AppDbContext>(options =>
         {
-            options.UseSqlite(configuration.GetConnectionString("Database") ?? throw new InvalidOperationException("empty database connection string"));
+            options.UseSqlite(builder.Configuration.GetConnectionString("Database") ?? throw new InvalidOperationException("empty database connection string"));
         }, ServiceLifetime.Scoped);
-        
-        return services;
+
+        return builder;
     }
 }
