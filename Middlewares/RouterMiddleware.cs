@@ -1,124 +1,52 @@
+using System.Text.RegularExpressions;
+
 namespace mementobot.Middlewares;
 
 internal delegate Task<bool> Route(IServiceProvider serviceProvider, Context context);
+internal interface IRouteHandler
+{
+    Task Handle(Context context);
+}
 internal class RouterMiddleware(IServiceProvider provider, IEnumerable<Route> routes) : IMiddleware
 {
     public async Task Invoke(Context context, UpdateDelegate next)
     {
+        var handled = false;
+        
         foreach (var route in routes)
         {
             if (await route(provider, context))
+            {
+                handled = true;
                 break;
+            }
         }
-        await next(context);
+
+        if (handled)
+        {
+            await next(context);
+        }
     }
 }
 internal class RouteBuilder(IServiceCollection services)
 {
     private List<Route> _routes { get; } = [];
 
-    public RouteBuilder Command(string name, Action<PipelineBuilder> configure)
+    public RouteBuilder Command<TRouteHandler>(string name) where TRouteHandler : class, IRouteHandler => When<TRouteHandler>(context => context.Update.Message is { Text: string text } && text.Length >= name.Length && text[..name.Length].Equals(name, StringComparison.InvariantCultureIgnoreCase));
+
+    public RouteBuilder File<TRouteHandler>(string pattern) where TRouteHandler : class, IRouteHandler => When<TRouteHandler>(context => context.Update.Message?.Document is { FileName: string fileName } && Regex.IsMatch(fileName, pattern));
+
+    public RouteBuilder Callback<TRouteHandler>(Func<string, bool> predicate) where TRouteHandler : class, IRouteHandler => When<TRouteHandler>(context => context.Update.CallbackQuery is { Data: string data } && predicate(data));
+
+    public RouteBuilder When<TRouteHandler>(Func<Context, bool> predicate) where TRouteHandler : class, IRouteHandler
     {
-        PipelineBuilder builder = new(services, name);
-
-        configure(builder);
-
-        builder.Build();
-
+        services.AddSingleton<TRouteHandler>();
+        
         _routes.Add(async (provider, context) =>
         {
-            if (context.Update.Message is not { Text: string text })
+            if (predicate(context))
             {
-                return false;
-            }
-
-            if (text[0] == '/' && text[1..].Equals(name))
-            {
-                await provider.GetRequiredKeyedService<UpdateDelegate>(name)(context);
-                return true;
-            }
-
-            return false;
-        });
-
-        return this;
-    }
-
-    public RouteBuilder File(string extension, Action<PipelineBuilder> configure)
-    {
-        PipelineBuilder builder = new(services, extension);
-
-        configure(builder);
-
-        builder.Build();
-
-        _routes.Add(async (provider, context) =>
-        {
-            if (context.Update.Message?.Document is not { FileName: string fileName })
-            {
-                return false;
-            }
-
-            if (Path.GetExtension(fileName).EndsWith(extension))
-            {
-                await provider.GetRequiredKeyedService<UpdateDelegate>(extension)(context);
-                return true;
-            }
-
-            return false;
-        });
-
-        return this;
-    }
-
-    public RouteBuilder Callback(Func<string, bool> predicate, Action<PipelineBuilder> configure)
-    {
-        var id = Guid.NewGuid().ToString();
-
-        PipelineBuilder builder = new(services, id);
-
-        configure(builder);
-
-        builder.Build();
-
-        _routes.Add(async (provider, context) =>
-        {
-            if (context.Update.CallbackQuery is not { Data: string data })
-            {
-                return false;
-            }
-
-            if (predicate(data))
-            {
-                await provider.GetRequiredKeyedService<UpdateDelegate>(id)(context);
-                return true;
-            }
-
-            return false;
-        });
-
-        return this;
-    }
-
-    public RouteBuilder When<TState>(Action<PipelineBuilder> configure, Func<TState, Context, bool>? predicate = null)
-    {
-        var id = Guid.NewGuid().ToString();
-
-        PipelineBuilder builder = new(services, id);
-
-        configure(builder);
-
-        builder.Build();
-
-        _routes.Add(async (provider, context) =>
-        {
-            if (context.State is TState state)
-            {
-                if (predicate is not null && !predicate(state, context))
-                {
-                    return false;
-                }
-                await provider.GetRequiredKeyedService<UpdateDelegate>(id)(context);
+                await provider.GetRequiredService<TRouteHandler>().Handle(context);
                 return true;
             }
 
@@ -134,5 +62,19 @@ internal class RouteBuilder(IServiceCollection services)
         {
             services.AddSingleton(route);
         }
+    }
+}
+
+internal static class Routing_DependencyInjectionExtensions
+{
+    public static IServiceCollection AddRouting(this IServiceCollection services, Action<RouteBuilder> configure)
+    {
+        RouteBuilder instance = new(services);
+
+        configure(instance);
+ 
+        instance.Build();
+
+        return services;
     }
 }

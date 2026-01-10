@@ -3,18 +3,17 @@ using mementobot.Telegram;
 
 namespace mementobot.Middlewares;
 
-internal class EnsureUserMiddleware(AppDbContext dbContext) : IMiddleware
+internal class EnsureUserMiddleware(
+    UserService userService
+) : IMiddleware
 {
     public async Task Invoke(Context context, UpdateDelegate next)
     {
-        var user = dbContext.Users.SingleOrDefault(x => x.Id == context.Update.GetChatId());
-        if (user is null)
-        {
-            user = new() { Id = context.Update.GetChatId() };
-            await dbContext.Users.AddAsync(user);
-            await dbContext.SaveChangesAsync();
-        }
-        context.User = user;
+        var telegramId = context.Update.GetChatId();
+
+        var userId = userService.GetOrCreateUser(telegramId);
+        context.UserId = userId;
+        
         await next(context);
     }
 }

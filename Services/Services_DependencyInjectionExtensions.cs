@@ -1,18 +1,36 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using FluentMigrator.Runner;
+using mementobot.Migrations;
+using Microsoft.Data.Sqlite;
 
 namespace mementobot.Services;
 
 internal static class Services_DependencyInjectionExtensions
 {
-    public static IHostApplicationBuilder AddAppDbContext(
-        this IHostApplicationBuilder builder
-    )
+    extension(IHostApplicationBuilder builder)
     {
-        builder.Services.AddDbContext<AppDbContext>(options =>
+        public IHostApplicationBuilder AddServices()
         {
-            options.UseSqlite(builder.Configuration.GetConnectionString("Database") ?? throw new InvalidOperationException("empty database connection string"));
-        }, ServiceLifetime.Scoped);
+            builder.Services.AddSingleton<QuizService>();
+            builder.Services.AddSingleton<StateService>();
+            builder.Services.AddSingleton<UserService>();
 
-        return builder;
+            return builder;
+        }
+
+        public IHostApplicationBuilder AddDb()
+        {
+            var connectionString = builder.Configuration.GetConnectionString("Db");
+            
+            builder.Services.AddSingleton<DbService>();
+            builder.Services.AddFluentMigratorCore().ConfigureRunner(x =>
+            {
+                x.AddSQLite();
+                x.WithGlobalConnectionString(connectionString);
+                x.ScanIn(typeof(InitialMigration).Assembly);
+            });
+            builder.Services.AddSingleton(_ => new SqliteConnection(connectionString));
+            
+            return builder;
+        }
     }
 }

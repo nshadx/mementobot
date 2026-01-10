@@ -1,13 +1,13 @@
-using mementobot.Entities.States;
+using mementobot.Services;
 using Telegram.Bot.Types;
-using User = mementobot.Entities.User;
 
 namespace mementobot.Middlewares;
 
 internal record Context(Update Update)
 {
-    public User User { get; set; } = null!;
-    public State? State { get; set; }
+    public int UserId { get; set; }
+    public StateType? CurrentState { get; set; }
+    public ActionType? ActionType { get; set; }
 }
 internal delegate Task UpdateDelegate(Context context);
 internal interface IMiddleware

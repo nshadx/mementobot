@@ -9,12 +9,14 @@ namespace mementobot.Telegram
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                await using var scope = serviceProvider.CreateAsyncScope();
-                var updateHandler = scope.ServiceProvider.GetRequiredService<IUpdateHandler>();
+                await using (var scope = serviceProvider.CreateAsyncScope())
+                {
+                    var updateHandler = scope.ServiceProvider.GetRequiredService<IUpdateHandler>();
                 
-                await client.ReceiveAsync(updateHandler, receiverOptions: new ReceiverOptions(){ DropPendingUpdates = true }, cancellationToken: stoppingToken);
-
-                await Task.Delay(500, stoppingToken);
+                    await client.ReceiveAsync(updateHandler, receiverOptions: new ReceiverOptions(){ DropPendingUpdates = true }, cancellationToken: stoppingToken);
+                }
+                
+                await Task.Delay(100, stoppingToken);
             }
         }
     }
