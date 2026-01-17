@@ -21,7 +21,6 @@ public static class TelegramDependencyInjectionExtensions
             builder.Services.AddHostedService<PollingService>();
             builder.Services.AddScoped<IUpdateHandler, UpdateHandler>();
             builder.Services.AddMemoryCache();
-            builder.Services.AddScoped<StateMachineRepository>();
             builder.Services.AddSingleton<TelegramFileService>();
             builder.Services.AddSingleton<MessageManager>();
         

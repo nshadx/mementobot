@@ -1,54 +1,62 @@
-﻿using mementobot.Services;
+﻿using FuzzySharp;
+using mementobot.Services;
 using mementobot.Telegram;
 using Telegram.Bot;
 
 namespace mementobot.StateMachines;
 
-public class AddQuizQuestionState
+public record UserQuizQuestion(QuizQuestion QuizQuestion, int Order)
 {
+    public int Order { get; set; } = Order;
+}
+
+public class QuizProgressState
+{
+    public List<UserQuizQuestion> UserQuizQuestions { get; set; } = [];
+    public UserQuizQuestion? CurrentQuestion { get; set; }
+ 
     public List<(Quiz Quiz, int Page)> Quizzes { get; set; } = [];
-    public int MessageId { get; set; }
     public int Page { get; set; }
-    public int QuizId { get; set; }
-    
-    public string Question { get; set; } = null!;
-    public string Answer { get; set; } = null!;
+    public int MessageId { get; set; }
     
     public int CurrentState { get; set; }
 }
 
-public class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
+public class QuizProgressStateMachine : StateMachine<QuizProgressState>
 {
-    public Event AddCommandReceivedEvent { get; private set; } = null!;
+    public Event OnSkipCallbackEvent { get; private set; } = null!;
+    public Event StartCommandReceivedEvent { get; private set; } = null!;
     public Event MessageReceivedEvent { get; private set; } = null!;
+    
     public Event PageForwardEvent { get; private set; } = null!;
     public Event PageBackwardEvent { get; private set; } = null!;
     public Event QuizPickedEvent { get; private set; } = null!;
 
-    public State<AddQuizQuestionState> QuizPicking { get; private set; } = null!;
-    public State<AddQuizQuestionState> FillingQuestion { get; private set; } = null!;
-    public State<AddQuizQuestionState> FillingAnswer { get; private set; } = null!;
-
-    public AddQuizQuestionStateMachine()
+    public State<QuizProgressState> QuizPicking { get; private set; } = null!;
+    public State<QuizProgressState> QuizQuestion { get; private set; } = null!;
+    
+    public QuizProgressStateMachine()
     {
-        ConfigureEvent(() => AddCommandReceivedEvent, update => update.Message?.Text?.StartsWith("/add") ?? false);
+        ConfigureEvent(() => OnSkipCallbackEvent, update => update.CallbackQuery?.Data is "skip");
+        ConfigureEvent(() => StartCommandReceivedEvent, update => update.Message?.Text?.StartsWith("/start") ?? false);
         ConfigureEvent(() => MessageReceivedEvent, update => update.Message?.Text is not null);
+        
         ConfigureEvent(() => PageForwardEvent, update => update.CallbackQuery?.Data is "forward");
         ConfigureEvent(() => PageBackwardEvent, update => update.CallbackQuery?.Data is "backward");
         ConfigureEvent(() => QuizPickedEvent, update => int.TryParse(update.CallbackQuery?.Data, out _));
-        
-        ConfigureStates(state => state.CurrentState, () => FillingQuestion, () => FillingAnswer, () => QuizPicking);
 
+        ConfigureStates(state => state.CurrentState, () => QuizPicking, () => QuizQuestion);
+        
         Initially(
-            When(AddCommandReceivedEvent)
+            When(StartCommandReceivedEvent)
                 .Then(BuildSelectingPages)
                 .TransitionTo(QuizPicking),
-            Ignore(MessageReceivedEvent),
             Ignore(QuizPickedEvent),
             Ignore(PageForwardEvent),
-            Ignore(PageBackwardEvent)
+            Ignore(PageBackwardEvent),
+            Ignore(MessageReceivedEvent)
         );
-        
+
         During(QuizPicking,
             When(PageForwardEvent)
                 .Then(ForwardPage)
@@ -58,31 +66,30 @@ public class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
             When(PageBackwardEvent)
                 .Then(BackwardPage)
         );
-
+        
         During(QuizPicking,
             When(QuizPickedEvent)
                 .Then(PickQuiz)
-                .TransitionTo(FillingQuestion)
+                .TransitionTo(QuizQuestion)
         );
-
-        During(FillingQuestion, 
+        
+        During(QuizQuestion,
+            When(QuizQuestion.Enter)
+                .Then(SendQuestion),
             When(MessageReceivedEvent)
-                .Then(SetQuestion)
-                .TransitionTo(FillingAnswer)
+                .Then(AnswerQuestion)
+                .TransitionTo(QuizQuestion),
+            When(OnSkipCallbackEvent)
+                .Then(SkipQuestion)
+                .TransitionTo(QuizQuestion)
         );
-
-        During(FillingAnswer,
-            When(MessageReceivedEvent)
-                .Then(SetAnswer)
-                .TransitionTo(Final)
-        );
-
-        Finally(x => x.Then(AddQuizQuestion));
+        
+        Finally(x => x.Then(CompleteQuiz));
         
         SetCompletedOnFinal();
     }
-
-    private async Task BuildSelectingPages(BehaviorContext<AddQuizQuestionState> context)
+    
+    private async Task BuildSelectingPages(BehaviorContext<QuizProgressState> context)
     {
         var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
         var userService = context.ServiceProvider.GetRequiredService<UserService>();
@@ -94,7 +101,7 @@ public class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
         );
         var quizzes = quizService.GetUserQuizzes(
             userId: userId,
-            published: false
+            published: true
         );
 
         var list = context.Instance.Quizzes;
@@ -132,7 +139,7 @@ public class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
         }
     }
 
-    private async Task ForwardPage(BehaviorContext<AddQuizQuestionState> context)
+    private async Task ForwardPage(BehaviorContext<QuizProgressState> context)
     {
         var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
         var client = context.ServiceProvider.GetRequiredService<ITelegramBotClient>();
@@ -162,7 +169,7 @@ public class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
         context.Instance.Page = page;
     }
 
-    private async Task BackwardPage(BehaviorContext<AddQuizQuestionState> context)
+    private async Task BackwardPage(BehaviorContext<QuizProgressState> context)
     {
         var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
         var client = context.ServiceProvider.GetRequiredService<ITelegramBotClient>();
@@ -192,14 +199,13 @@ public class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
         context.Instance.Page = page;
     }
 
-    private async Task PickQuiz(BehaviorContext<AddQuizQuestionState> context)
+    private async Task PickQuiz(BehaviorContext<QuizProgressState> context)
     {
-        var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
         var client = context.ServiceProvider.GetRequiredService<ITelegramBotClient>();
+        var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
         
         var chatId = context.Update.GetChatId();
         var quizId = int.Parse(context.Update.CallbackQuery?.Data!);
-        context.Instance.QuizId = quizId;
         
         await client.AnswerCallbackQuery(
             callbackQueryId: context.Update.CallbackQuery!.Id
@@ -209,54 +215,77 @@ public class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
             messageId: context.Instance.MessageId
         );
         
-        var messageId = await messageManager.EnterQuestionMessage(
-            chatId: chatId
+        var quizQuestions = quizService.GetQuizQuestions(
+            quizId: quizId
+        );
+        var userQuizQuestions = quizQuestions
+            .Select((x, i) => new UserQuizQuestion(x, i))
+            .ToList();
+        context.Instance.UserQuizQuestions = userQuizQuestions;
+    }
+
+    private async Task AnswerQuestion(BehaviorContext<QuizProgressState> context)
+    {
+        var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+        
+        var currentAnswer = context.Update.Message?.Text;
+        var correctAnswer = context.Instance.CurrentQuestion!.QuizQuestion.Answer;
+        if (currentAnswer is null)
+        {
+            return;
+        }
+        
+        var score = Fuzz.TokenSortRatio(correctAnswer, currentAnswer);
+        var nextQuestionOrder = score switch
+        {
+            100 => 0,
+            >= 80 => 0,
+            >= 50 => 5,
+            _ => 3
+        };
+        context.Instance.CurrentQuestion.Order += nextQuestionOrder;
+
+        var messageId = await messageManager.SendCompletedAnswering(
+            chatId: context.Update.GetChatId(),
+            question: context.Instance.CurrentQuestion.QuizQuestion,
+            repeatsAfter: nextQuestionOrder,
+            score: score
         );
         context.Instance.MessageId = messageId;
     }
 
-    private async Task SetQuestion(BehaviorContext<AddQuizQuestionState> context)
+    private Task SkipQuestion(BehaviorContext<QuizProgressState> context)
     {
-        var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-
-        var chatId = context.Update.GetChatId();
-        var question = context.Update.Message?.Text!;
-        context.Instance.Question = question;
-
-        var messageId = await messageManager.EnterAnswerMessage(
-            chatId: chatId
-        );
-        context.Instance.MessageId = messageId;
-    }
-
-    private async Task SetAnswer(BehaviorContext<AddQuizQuestionState> context)
-    {
-        var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-        
-        var chatId = context.Update.GetChatId();
-        var answer = context.Update.Message?.Text!;
-        context.Instance.Answer = answer;
-        
-        await messageManager.DeleteMessage(
-            chatId: chatId,
-            messageId: context.Instance.MessageId
-        );
-    }
-
-    private Task AddQuizQuestion(BehaviorContext<AddQuizQuestionState> context)
-    {
-        var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
-
-        var quizId = context.Instance.QuizId;
-        var question = context.Instance.Question;
-        var answer = context.Instance.Answer;
-
-        quizService.AddQuizQuestion(
-            quizId: quizId,
-            question: question,
-            answer: answer
-        );
-
         return Task.CompletedTask;
+    }
+
+    private async Task SendQuestion(BehaviorContext<QuizProgressState> context)
+    {
+        var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+        var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
+        
+        var chatId = context.Update.GetChatId();
+        var nextQuestion = context.Instance.UserQuizQuestions.FirstOrDefault(x => x.Order > (context.Instance.CurrentQuestion?.Order ?? -1));
+        if (nextQuestion is null)
+        {
+            await context.TransitionToState(Final);
+            return;
+        }
+        context.Instance.CurrentQuestion = nextQuestion;
+
+        var messageId = await messageManager.SendQuestionMessage(
+            chatId: chatId,
+            question: nextQuestion.QuizQuestion
+        );
+        context.Instance.MessageId = messageId;
+    }
+
+    private async Task CompleteQuiz(BehaviorContext<QuizProgressState> context)
+    {
+        var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+
+        var messageId = await messageManager.SendCompletedQuiz(
+            chatId: context.Update.GetChatId()
+        );
     }
 }

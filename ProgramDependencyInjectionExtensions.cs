@@ -1,4 +1,5 @@
 ﻿using mementobot.Handlers;
+using mementobot.StateMachines;
 using mementobot.Telegram;
 
 namespace mementobot;
@@ -11,12 +12,18 @@ internal static class ProgramDependencyInjectionExtensions
         {
             builder.Services.AddRouting(builder =>
             {
-                //builder.Command<StartQuizCommandHandler>("/start");
                 builder.Command<CreateNewQuizCommandHandler>("/new");
-                builder.Command<PublishQuizCommandHandler>("/publish");
-                builder.Command<AddQuizQuestionCommandHandler>("/add");
             });
         
+            return builder;
+        }
+
+        public IHostApplicationBuilder RouteStateMachines()
+        {
+            builder.AddStateMachine<AddQuizQuestionStateMachine, AddQuizQuestionState>();
+            builder.AddStateMachine<PublishQuizStateMachine, PublishQuizState>();
+            builder.AddStateMachine<QuizProgressStateMachine, QuizProgressState>();
+
             return builder;
         }
         

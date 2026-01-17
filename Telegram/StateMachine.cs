@@ -20,11 +20,14 @@ public class State<TInstance> where TInstance : class
 {
     private readonly Dictionary<Event, ActivityBehaviorBuilder<TInstance>> _behaviors = [];
     private readonly HashSet<Event> _ignoredEvents = [];
+    private readonly HashSet<Event> _events = [];
     
     public string Name { get; }
     
     public Event Enter { get; }
     public Event Leave { get; }
+
+    public IReadOnlyCollection<Event> Events => _events;
 
     public State(string name)
     {
@@ -36,6 +39,7 @@ public class State<TInstance> where TInstance : class
     
     public void Bind(Event @event, IStateMachineActivity<TInstance> activity)
     {
+        _events.Add(@event);
         if (!_behaviors.TryGetValue(@event, out var builder))
         {
             builder = new();
@@ -279,14 +283,13 @@ public class StateAccessorIndex<TInstance>(State<TInstance> initial, State<TInst
 public interface IStateMachine
 {
     IReadOnlyCollection<Event> Events { get; }
-    Task RaiseEvent(BehaviorContext<object> context);
-    bool IsFinished();
+    IReadOnlyCollection<Event> InitialEvents { get; }
+    Task RaiseEvent(BehaviorContext context);
 }
 
 public class StateMachine<TInstance> : IStateMachine where TInstance : class
 {
     private readonly List<Event> _events = [];
-    private bool _isFinished;
     
     protected State<TInstance> Final { get; }
     protected State<TInstance> Initial { get; }
@@ -318,33 +321,29 @@ public class StateMachine<TInstance> : IStateMachine where TInstance : class
     //     }
     // }
 
-    public async Task RaiseEvent(BehaviorContext<object> context)
-    {
-        var objInstance = context.Instance;
-        if (objInstance.GetType() == typeof(TInstance))
-        {
-            var instance = (TInstance)objInstance;
-            BehaviorContext<TInstance> newContext = new(context.ServiceProvider, instance, context.Event, context.Update);
+    public IReadOnlyCollection<Event> Events => _events;
 
-            var state = await StateAccessor.Get(newContext);
-            if (state is null)
+    public IReadOnlyCollection<Event> InitialEvents => Initial.Events;
+
+    public async Task RaiseEvent(BehaviorContext context)
+    {
+        if (context is BehaviorContext<TInstance> genericContext)
+        {
+            genericContext.StateMachine = this;
+            
+            var currentState = await StateAccessor.Get(genericContext);
+            if (currentState is not null)
             {
-                return;
+                await currentState.Raise(genericContext);
             }
-        
-            await state.Raise(newContext);
         }
     }
 
-    public IReadOnlyCollection<Event> Events => _events;
-    
-    public bool IsFinished() => _isFinished;
-
-    protected void SetFinishedWhenCompleted()
+    protected void SetCompletedOnFinal()
     {
-        During(Final, When(Final.Leave).Then(_ =>
+        During(Final, When(Final.Enter).Then(context =>
         {
-            _isFinished = true;
+            context.IsCompleted = true;
             return Task.CompletedTask;
         }));
     }
@@ -417,6 +416,7 @@ public class StateMachine<TInstance> : IStateMachine where TInstance : class
 
 public class BehaviorContext(IServiceProvider serviceProvider, Event @event, Update update)
 {
+    public bool IsCompleted { get; set; }
     public Event Event { get; set; } = @event;
     public Update Update { get; set; } = update;
     public IServiceProvider ServiceProvider { get; } = serviceProvider;
@@ -424,6 +424,7 @@ public class BehaviorContext(IServiceProvider serviceProvider, Event @event, Upd
 
 public class BehaviorContext<TInstance>(IServiceProvider serviceProvider, TInstance instance, Event @event, Update update) : BehaviorContext(serviceProvider, @event, update) where TInstance : class
 {
+    public StateMachine<TInstance> StateMachine { get; set; } = null!;
     public TInstance Instance { get; } = instance;
 }
 
@@ -528,7 +529,7 @@ public class TransitionStateMachineActivity<TInstance>(State<TInstance> toState,
     public async Task Execute(BehaviorContext<TInstance> context, IBehavior<TInstance> next)
     {
         var currentState = await stateAccessor.Get(context);
-        if (currentState == toState || currentState is null)
+        if (currentState is null)
         {
             return;
         }
@@ -556,6 +557,20 @@ public static class EventActivityBinderExtensions
         public EventActivityBinder<TInstance> TransitionTo(State<TInstance> state)
         {
             return binder.Add(new TransitionStateMachineActivity<TInstance>(state, binder.StateMachine.StateAccessor));
+        }
+    }
+}
+
+public static class BehaviorContextExtensions
+{
+    extension<TInstance>(BehaviorContext<TInstance> context) where TInstance : class
+    {
+        public async Task TransitionToState(State<TInstance> toState)
+        {
+            var stateAccessor = context.StateMachine.StateAccessor;
+            TransitionStateMachineActivity<TInstance> activity = new(toState, stateAccessor);
+            ActivityBehavior<TInstance> behavior = new(activity, new EmptyBehavior<TInstance>());
+            await behavior.Execute(context);
         }
     }
 }

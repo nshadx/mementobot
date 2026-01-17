@@ -1,4 +1,5 @@
-﻿using Telegram.Bot;
+﻿using Microsoft.Extensions.Caching.Memory;
+using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 
@@ -7,7 +8,8 @@ namespace mementobot.Telegram
     public class UpdateHandler(
         IServiceProvider serviceProvider,
         ILogger<UpdateHandler> logger,
-        StateMachineRepository stateMachineRepository,
+        IMemoryCache memoryCache,
+        IEnumerable<IStateMachine> stateMachines,
         UpdateDelegate pipeline
     ) : IUpdateHandler
     {
@@ -27,30 +29,54 @@ namespace mementobot.Telegram
             logger.LogInformation("Received: {updateType}", update.Type);
 
             var chatId = update.GetChatId();
-            var (stateMachine, instance) = stateMachineRepository.GetCurrentStateMachine(chatId);
-            if (stateMachine is not null)
+            var instance = memoryCache.Get($"{chatId}-instance");
+            if (instance is null)
             {
-                if (stateMachine.IsFinished())
+                var stateMachine = stateMachines.SingleOrDefault(x => x.InitialEvents.Any(x => x.Condition(update)));
+                if (stateMachine is not null)
                 {
-                    stateMachineRepository.Remove(chatId);
+                    var @event = stateMachine.InitialEvents.Single(x => x.Condition(update));
+                    var stateMachineType = stateMachine.GetType();
+                    if (stateMachineType.BaseType!.IsGenericType && stateMachineType.BaseType.GetGenericTypeDefinition() == typeof(StateMachine<>))
+                    {
+                        var instanceType = stateMachineType.BaseType.GetGenericArguments()[0];
+                        instance = Activator.CreateInstance(instanceType);
+                    }
+
+                    memoryCache.Set($"{chatId}-instance", instance);
+
+                    var context = (BehaviorContext)Activator.CreateInstance(typeof(BehaviorContext<>).MakeGenericType(instance!.GetType()), serviceProvider, instance, @event, update)!;
+                    await stateMachine.RaiseEvent(context);
+                    if (context.IsCompleted)
+                    {
+                        memoryCache.Remove($"{chatId}-instance");
+                    }
                 }
                 else
                 {
-                    var events = stateMachine.Events;
-                    foreach (var @event in events)
+                    Context context = new(update);
+                    await pipeline(context);
+                }
+            }
+            else
+            {
+                var stateMachine = stateMachines.SingleOrDefault(x => x.GetType().BaseType!.IsGenericType && x.GetType().BaseType!.GetGenericArguments()[0] == instance.GetType() && x.Events.Any(x => x.Condition(update)));
+                if (stateMachine is not null)
+                {
+                    var @event = stateMachine.Events.Single(x => x.Condition(update));
+                    var context = (BehaviorContext)Activator.CreateInstance(typeof(BehaviorContext<>).MakeGenericType(instance.GetType()), serviceProvider, instance, @event, update)!;
+                    await stateMachine.RaiseEvent(context);
+                    if (context.IsCompleted)
                     {
-                        if (@event.Condition(update))
-                        {
-                            BehaviorContext<object> behaviorContext = new(serviceProvider, instance, @event, update);
-                            await stateMachine.RaiseEvent(behaviorContext);
-                        }
+                        memoryCache.Remove($"{chatId}-instance");
                     }
                 }
-                
+                else
+                {
+                    Context context = new(update);
+                    await pipeline(context);   
+                }
             }
-            
-            Context context = new(update);
-            await pipeline(context);
         }
     }
 }

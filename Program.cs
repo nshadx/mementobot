@@ -9,6 +9,7 @@ builder.AddServices();
 builder.AddDb();
 
 builder.RouteCommands();
+builder.RouteStateMachines();
 builder.ConfigureAppPipeline();
 
 using (var app = builder.Build())

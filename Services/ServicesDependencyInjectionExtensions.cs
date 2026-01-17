@@ -11,7 +11,6 @@ internal static class ServicesDependencyInjectionExtensions
         public IHostApplicationBuilder AddServices()
         {
             builder.Services.AddSingleton<QuizService>();
-            builder.Services.AddSingleton<StateService>();
             builder.Services.AddSingleton<UserService>();
 
             return builder;

@@ -8,61 +8,40 @@ public class Quiz
     public string Name { get; set; } = null!;
 }
 
+public class QuizQuestion
+{
+    public int Id { get; set; }
+    public string Question { get; set; } = null!;
+    public string Answer { get; set; } = null!;
+}
+
 internal class QuizService(
     SqliteConnection connection
 )
 {
-    public IEnumerable<int> GetQuizQuestionIds(int quizId, SqliteTransaction? transaction = null)
+    public IEnumerable<QuizQuestion> GetQuizQuestions(int quizId, SqliteTransaction? transaction = null)
     {
-        SqliteCommand command = new("""SELECT id FROM quiz_questions WHERE quiz_id = @quiz_id""", connection, transaction);
+        SqliteCommand command = new("""SELECT id, question, answer FROM quiz_questions WHERE quiz_id = @quiz_id""", connection, transaction);
         command.Parameters.AddWithValue("@quiz_id", quizId);
         
         using (var reader = command.ExecuteReader())
         {
             while (reader.Read())
             {
-                yield return reader.GetInt32(0);
-            }
-        }
-    }
-        
-    public void PublishQuiz(int quizId, SqliteTransaction? transaction = null)
-    {
-        SqliteCommand command = new("""UPDATE quizzes SET is_published = true WHERE id = @id""", connection, transaction);
-        command.Parameters.AddWithValue("@id", quizId);
-        
-        command.ExecuteNonQuery();
-    }
-    
-    public IEnumerable<int> GetPublishedQuizIds(SqliteTransaction? transaction = null)
-    {
-        SqliteCommand command = new("""SELECT id FROM quizzes WHERE is_published = TRUE""", connection, transaction);
-        using (var reader = command.ExecuteReader())
-        {
-            while (reader.Read())
-            {
-                yield return reader.GetInt32(0);
+                var id = reader.GetInt32(0);
+                var question = reader.GetString(1);
+                var answer = reader.GetString(2);
+
+                yield return new() { Id =  id, Question = question, Answer = answer };
             }
         }
     }
     
-    public IEnumerable<int> GetUserQuizIds(int userId, SqliteTransaction? transaction = null)
+    public IEnumerable<Quiz> GetUserQuizzes(int userId, bool published, SqliteTransaction? transaction = null)
     {
-        SqliteCommand command = new("""SELECT id FROM quizzes WHERE user_id = @user_id""", connection, transaction);
+        SqliteCommand command = new("""SELECT id, name FROM quizzes WHERE user_id = @user_id AND is_published IS @published""", connection, transaction);
         command.Parameters.AddWithValue("@user_id", userId);
-        using (var reader = command.ExecuteReader())
-        {
-            while (reader.Read())
-            {
-                yield return reader.GetInt32(0);
-            }
-        }
-    }
-    
-    public IEnumerable<Quiz> GetUserQuizzes(int userId, SqliteTransaction? transaction = null)
-    {
-        SqliteCommand command = new("""SELECT id, name FROM quizzes WHERE user_id = @user_id""", connection, transaction);
-        command.Parameters.AddWithValue("@user_id", userId);
+        command.Parameters.AddWithValue("@published", published);
         using (var reader = command.ExecuteReader())
         {
             while (reader.Read())
@@ -73,18 +52,13 @@ internal class QuizService(
             }
         }
     }
-    
-    public IEnumerable<int> GetNotPublishedUserQuizIds(int userId, SqliteTransaction? transaction = null)
+        
+    public void PublishQuiz(int quizId, SqliteTransaction? transaction = null)
     {
-        SqliteCommand command = new("""SELECT id FROM quizzes WHERE NOT is_published AND user_id = @user_id""", connection, transaction);
-        command.Parameters.AddWithValue("@user_id", userId);
-        using (var reader = command.ExecuteReader())
-        {
-            while (reader.Read())
-            {
-                yield return reader.GetInt32(0);
-            }
-        }
+        SqliteCommand command = new("""UPDATE quizzes SET is_published = true WHERE id = @id""", connection, transaction);
+        command.Parameters.AddWithValue("@id", quizId);
+        
+        command.ExecuteNonQuery();
     }
 
     public void CreateNew(int userId, string name, SqliteTransaction? transaction = null)
@@ -97,21 +71,7 @@ internal class QuizService(
         
         command.ExecuteNonQuery();
     }
-
-    public string GetQuizQuestionAnswer(int questionId, SqliteTransaction? transaction = null)
-    {
-        SqliteCommand command = new("""
-                                    SELECT answer
-                                    FROM quiz_questions
-                                    INNER JOIN user_quiz_questions ON user_quiz_questions.quiz_question_id = quiz_questions.id
-                                    WHERE user_quiz_questions.id = @question_id
-                                    """, connection, transaction);
-        command.Parameters.AddWithValue("@question_id", questionId);
-
-        var answer = (string)command.ExecuteScalar()!;
-        return answer;
-    }
-
+    
     public void AddQuizQuestion(int quizId, string question, string answer)
     {
         

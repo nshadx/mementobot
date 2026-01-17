@@ -1,5 +1,6 @@
 ﻿using mementobot.Services;
 using mementobot.Telegram;
+using Telegram.Bot;
 
 namespace mementobot.StateMachines;
 
@@ -7,6 +8,7 @@ public class PublishQuizState
 {
     public List<(Quiz Quiz, int Page)> Quizzes { get; set; } = [];
     public int MessageId { get; set; }
+    public int Page { get; set; }
     public int QuizId { get; set; }
     
     public int CurrentState { get; set; }
@@ -40,6 +42,16 @@ public class PublishQuizStateMachine : StateMachine<PublishQuizState>
         );
 
         During(QuizPicking,
+            When(PageForwardEvent)
+                .Then(ForwardPage)
+        );
+        
+        During(QuizPicking,
+            When(PageBackwardEvent)
+                .Then(BackwardPage)
+        );
+        
+        During(QuizPicking,
             When(QuizPickedEvent)
                 .Then(PickQuiz)
                 .TransitionTo(Final)
@@ -47,7 +59,7 @@ public class PublishQuizStateMachine : StateMachine<PublishQuizState>
         
         Finally(x => x.Then(PublishQuiz));
         
-        SetFinishedWhenCompleted();
+        SetCompletedOnFinal();
     }
     
     private async Task BuildSelectingPages(BehaviorContext<PublishQuizState> context)
@@ -61,12 +73,14 @@ public class PublishQuizStateMachine : StateMachine<PublishQuizState>
             telegramId: chatId
         );
         var quizzes = quizService.GetUserQuizzes(
-            userId: userId
+            userId: userId,
+            published: false
         );
 
         var list = context.Instance.Quizzes;
         var counter = 1;
         var page = 1;
+        context.Instance.Page = 1;
         foreach (var quiz in quizzes)
         {
             if (counter <= 6)
@@ -74,8 +88,11 @@ public class PublishQuizStateMachine : StateMachine<PublishQuizState>
                 list.Add((quiz, page));
                 counter++;
             }
-
-            page++;
+            else
+            {
+                page++;
+                counter = 0;
+            }
         }
 
         var firstPageQuizzes = list
@@ -88,15 +105,89 @@ public class PublishQuizStateMachine : StateMachine<PublishQuizState>
             quizzes: firstPageQuizzes
         );
         context.Instance.MessageId = messageId;
+        if (list.Count == 0)
+        {
+            context.IsCompleted = true;
+            return;
+        }
     }
 
-    private Task PickQuiz(BehaviorContext<PublishQuizState> context)
+    private async Task ForwardPage(BehaviorContext<PublishQuizState> context)
     {
+        var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+        var client = context.ServiceProvider.GetRequiredService<ITelegramBotClient>();
+        
+        await client.AnswerCallbackQuery(
+            callbackQueryId: context.Update.CallbackQuery!.Id
+        );
+        
+        var page = context.Instance.Page;
+        if (++page > context.Instance.Quizzes.Max(x => x.Page))
+        {
+            return;
+        }
+        
+        var pageQuizzes = context.Instance.Quizzes
+            .Where(x => x.Page == page)
+            .Select(x => x.Quiz)
+            .ToArray();
+        
+        var chatId = context.Update.GetChatId();
+        var messageId = await messageManager.SelectPollMessage(
+            chatId: chatId,
+            quizzes: pageQuizzes,
+            editMessageId: context.Instance.MessageId
+        );
+        context.Instance.MessageId = messageId;
+        context.Instance.Page = page;
+    }
+
+    private async Task BackwardPage(BehaviorContext<PublishQuizState> context)
+    {
+        var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+        var client = context.ServiceProvider.GetRequiredService<ITelegramBotClient>();
+        
+        await client.AnswerCallbackQuery(
+            callbackQueryId: context.Update.CallbackQuery!.Id
+        );
+        
+        var page = context.Instance.Page;
+        if (--page < context.Instance.Quizzes.Min(x => x.Page))
+        {
+            return;
+        }
+        
+        var pageQuizzes = context.Instance.Quizzes
+            .Where(x => x.Page == page)
+            .Select(x => x.Quiz)
+            .ToArray();
+        
+        var chatId = context.Update.GetChatId();
+        var messageId = await messageManager.SelectPollMessage(
+            chatId: chatId,
+            quizzes: pageQuizzes,
+            editMessageId: context.Instance.MessageId
+        );
+        context.Instance.MessageId = messageId;
+        context.Instance.Page = page;
+    }
+
+    private async Task PickQuiz(BehaviorContext<PublishQuizState> context)
+    {
+        var client = context.ServiceProvider.GetRequiredService<ITelegramBotClient>();
+        
+        await client.AnswerCallbackQuery(
+            callbackQueryId: context.Update.CallbackQuery!.Id
+        );
+        
         var chatId = context.Update.GetChatId();
         var quizId = int.Parse(context.Update.CallbackQuery?.Data!);
         context.Instance.QuizId = quizId;
-
-        return Task.CompletedTask;
+        
+        await client.DeleteMessage(
+            chatId: chatId,
+            messageId: context.Instance.MessageId
+        );
     }
 
     private async Task PublishQuiz(BehaviorContext<PublishQuizState> context)
