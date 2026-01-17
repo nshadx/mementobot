@@ -90,4 +90,13 @@ internal class MessageManager(
 
         return message.Id;
     }
+
+    public async Task<int> SendQuizPublishedMessage(long chatId)
+    {
+        var message = await client.SendMessage(
+            chatId: chatId,
+            text: "Опросник опубликован"
+        );
+        return message.Id;
+    }
 }

@@ -6,7 +6,6 @@ namespace mementobot.StateMachines;
 public class AddQuizQuestionState
 {
     public List<(Quiz Quiz, int Page)> Quizzes { get; set; } = [];
-    
     public int MessageId { get; set; }
     public int QuizId { get; set; }
     

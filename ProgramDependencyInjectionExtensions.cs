@@ -13,7 +13,7 @@ internal static class ProgramDependencyInjectionExtensions
             {
                 //builder.Command<StartQuizCommandHandler>("/start");
                 builder.Command<CreateNewQuizCommandHandler>("/new");
-                //builder.Command<PublishQuizCommandHandler>("/publish");
+                builder.Command<PublishQuizCommandHandler>("/publish");
                 builder.Command<AddQuizQuestionCommandHandler>("/add");
             });
         

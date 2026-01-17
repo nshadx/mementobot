@@ -21,11 +21,15 @@ public class State<TInstance> where TInstance : class
     private readonly Dictionary<Event, ActivityBehaviorBuilder<TInstance>> _behaviors = [];
     private readonly HashSet<Event> _ignoredEvents = [];
     
+    public string Name { get; }
+    
     public Event Enter { get; }
     public Event Leave { get; }
 
-    public State()
+    public State(string name)
     {
+        Name = name;
+        
         Enter = new("Enter", _ => true);
         Leave = new("Leave", _ => true);
     }
@@ -80,7 +84,7 @@ public class ActivityBehaviorBuilder<TInstance> : IBehavior<TInstance> where TIn
         }
 
         var behavior = new ActivityBehavior<TInstance>(_activities[^1], new EmptyBehavior<TInstance>());
-        for (var i = _activities.Count - 1; i >= 0; i--)
+        for (var i = _activities.Count - 2; i >= 0; i--)
         {
             behavior = new ActivityBehavior<TInstance>(_activities[i], behavior);
         }
@@ -291,8 +295,8 @@ public class StateMachine<TInstance> : IStateMachine where TInstance : class
 
     protected StateMachine()
     {
-        Final = new();
-        Initial = new();
+        Final = new("Final");
+        Initial = new("Initial");
         StateAccessor = new DefaultStateAccessor<TInstance>();
     }
     
@@ -351,7 +355,7 @@ public class StateMachine<TInstance> : IStateMachine where TInstance : class
         foreach (var expression in stateAccessors)
         {
             var propertyInfo = (PropertyInfo)((MemberExpression)expression.Body).Member;
-            State<TInstance> state = new(); 
+            State<TInstance> state = new(propertyInfo.Name); 
             propertyInfo.SetValue(this, state);
             stateList.Add(state);
         }
@@ -379,9 +383,7 @@ public class StateMachine<TInstance> : IStateMachine where TInstance : class
     
     protected void Finally(Func<EventActivityBinder<TInstance>, EventActivityBinder<TInstance>> action)
     {
-        var binder = When(Final.Enter);
-        binder = action(binder);
-        During(Final, binder);
+        During(Final, action(When(Final.Enter)));
     }
     
     protected IEventActivities<TInstance> Ignore(Event @event)
@@ -519,7 +521,7 @@ public class ActionStateMachineActivity<TInstance>(Func<BehaviorContext<TInstanc
 }
 
 /*
- * Выполняет непосредственно переход к следующему состоянию. Используется в InitialIfNullStateAccessor
+ * Выполняет непосредственно переход к следующему состоянию. Также используется в InitialIfNullStateAccessor
  */
 public class TransitionStateMachineActivity<TInstance>(State<TInstance> toState, IStateAccessor<TInstance> stateAccessor) : IStateMachineActivity<TInstance> where TInstance : class
 {
