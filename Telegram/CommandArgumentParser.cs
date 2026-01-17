@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
-namespace mementobot.Handlers;
+namespace mementobot.Telegram;
 
 public static class CommandArgumentParser
 {

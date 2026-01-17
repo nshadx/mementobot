@@ -7,8 +7,9 @@ namespace mementobot.Telegram;
 /*
  * Событие стейт-машины. Является ее синглтоном, просто задает некий триггер.
  */
-public class Event(Func<Update, bool> condition)
+public class Event(string name, Func<Update, bool> condition)
 {
+    public string Name { get; } = name;
     public Func<Update, bool> Condition { get; } = condition;
 }
 
@@ -20,8 +21,14 @@ public class State<TInstance> where TInstance : class
     private readonly Dictionary<Event, ActivityBehaviorBuilder<TInstance>> _behaviors = [];
     private readonly HashSet<Event> _ignoredEvents = [];
     
-    public Event Enter { get; } = null!;
-    public Event Leave { get; } = null!;
+    public Event Enter { get; }
+    public Event Leave { get; }
+
+    public State()
+    {
+        Enter = new("Enter", _ => true);
+        Leave = new("Leave", _ => true);
+    }
     
     public void Bind(Event @event, IStateMachineActivity<TInstance> activity)
     {
@@ -265,17 +272,27 @@ public class StateAccessorIndex<TInstance>(State<TInstance> initial, State<TInst
     public int this[State<TInstance> state] => _assignedStates.IndexOf(state);
 }
 
-public class StateMachine<TInstance> where TInstance : class
+public interface IStateMachine
+{
+    IReadOnlyCollection<Event> Events { get; }
+    Task RaiseEvent(BehaviorContext<object> context);
+    bool IsFinished();
+}
+
+public class StateMachine<TInstance> : IStateMachine where TInstance : class
 {
     private readonly List<Event> _events = [];
+    private bool _isFinished;
     
-    protected State<TInstance> Final { get; } = null!;
-    protected State<TInstance> Initial { get; } = null!;
+    protected State<TInstance> Final { get; }
+    protected State<TInstance> Initial { get; }
 
     public IStateAccessor<TInstance> StateAccessor { get; private set; }
 
     protected StateMachine()
     {
+        Final = new();
+        Initial = new();
         StateAccessor = new DefaultStateAccessor<TInstance>();
     }
     
@@ -297,21 +314,49 @@ public class StateMachine<TInstance> where TInstance : class
     //     }
     // }
 
-    public async Task RaiseEvent(BehaviorContext<TInstance> context)
+    public async Task RaiseEvent(BehaviorContext<object> context)
     {
-        var state = await StateAccessor.Get(context);
-        if (state is null)
+        var objInstance = context.Instance;
+        if (objInstance.GetType() == typeof(TInstance))
         {
-            return;
-        }
+            var instance = (TInstance)objInstance;
+            BehaviorContext<TInstance> newContext = new(context.ServiceProvider, instance, context.Event, context.Update);
+
+            var state = await StateAccessor.Get(newContext);
+            if (state is null)
+            {
+                return;
+            }
         
-        await state.Raise(context);
+            await state.Raise(newContext);
+        }
     }
 
-    public IReadOnlyCollection<Event> Event => _events;
+    public IReadOnlyCollection<Event> Events => _events;
     
-    protected void ConfigureStates(Expression<Func<TInstance, int>> propertyAccessor, params State<TInstance>[] states)
+    public bool IsFinished() => _isFinished;
+
+    protected void SetFinishedWhenCompleted()
     {
+        During(Final, When(Final.Leave).Then(_ =>
+        {
+            _isFinished = true;
+            return Task.CompletedTask;
+        }));
+    }
+    
+    protected void ConfigureStates(Expression<Func<TInstance, int>> propertyAccessor, params Expression<Func<State<TInstance>>>[] stateAccessors)
+    {
+        List<State<TInstance>> stateList = new(stateAccessors.Length);
+        foreach (var expression in stateAccessors)
+        {
+            var propertyInfo = (PropertyInfo)((MemberExpression)expression.Body).Member;
+            State<TInstance> state = new(); 
+            propertyInfo.SetValue(this, state);
+            stateList.Add(state);
+        }
+
+        var states = stateList.ToArray();
         StateAccessorIndex<TInstance> index = new(Initial, Final, states);
         IntStateAccessor<TInstance> stateAccessor = new(propertyAccessor, index);
         
@@ -322,7 +367,7 @@ public class StateMachine<TInstance> where TInstance : class
     protected void ConfigureEvent<TEvent>(Expression<Func<TEvent>> propertyAccessor, Func<Update, bool> condition)
     {
         var propertyInfo = (PropertyInfo)((MemberExpression)propertyAccessor.Body).Member;
-        Event @event = new(condition); 
+        Event @event = new(propertyInfo.Name, condition); 
         propertyInfo.SetValue(this, @event);
         _events.Add(@event);
     }
@@ -367,16 +412,17 @@ public class StateMachine<TInstance> where TInstance : class
 /*
  * Контекст выполнения стейт-машины. Содержит стриггернутый ивент, само сообщение (в данном случае Update), а также TInstance, необходимый для переключения состояний.
  */
-public class BehaviorContext<TInstance>(IServiceProvider serviceProvider, TInstance instance, Event @event, Update update) where TInstance : class
+
+public class BehaviorContext(IServiceProvider serviceProvider, Event @event, Update update)
 {
-    public TInstance Instance { get; } = instance;
     public Event Event { get; set; } = @event;
     public Update Update { get; set; } = update;
+    public IServiceProvider ServiceProvider { get; } = serviceProvider;
+}
 
-    public T GetRequiredService<T>() where T : class
-    {
-        return serviceProvider.GetRequiredService<T>();
-    }
+public class BehaviorContext<TInstance>(IServiceProvider serviceProvider, TInstance instance, Event @event, Update update) : BehaviorContext(serviceProvider, @event, update) where TInstance : class
+{
+    public TInstance Instance { get; } = instance;
 }
 
 /*

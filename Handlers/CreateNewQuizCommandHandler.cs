@@ -1,4 +1,3 @@
-using mementobot.Middlewares;
 using mementobot.Services;
 using mementobot.Telegram;
 using Telegram.Bot;
@@ -6,6 +5,7 @@ using Telegram.Bot;
 namespace mementobot.Handlers;
 
 internal class CreateNewQuizCommandHandler(
+    UserService userService,
     QuizService quizService,
     MessageManager messageManager,
     ITelegramBotClient client
@@ -28,8 +28,10 @@ internal class CreateNewQuizCommandHandler(
             return;
         }
 
+        var chatId = context.Update.GetChatId();
+        var userId = userService.GetOrCreateUser(chatId);
         quizService.CreateNew(
-            userId: context.UserId,
+            userId: userId,
             name: value
         );
 

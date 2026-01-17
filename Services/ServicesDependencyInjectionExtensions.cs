@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 namespace mementobot.Services;
 
-internal static class Services_DependencyInjectionExtensions
+internal static class ServicesDependencyInjectionExtensions
 {
     extension(IHostApplicationBuilder builder)
     {

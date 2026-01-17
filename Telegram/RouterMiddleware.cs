@@ -1,15 +1,17 @@
 using System.Text.RegularExpressions;
 
-namespace mementobot.Middlewares;
+namespace mementobot.Telegram;
 
-internal delegate Task<bool> Route(IServiceProvider serviceProvider, Context context);
-internal interface IRouteHandler
+public delegate Task<bool> Route(IServiceProvider serviceProvider, Context context);
+
+public interface IRouteHandler
 {
     Task Handle(Context context);
 }
-internal class RouterMiddleware(IServiceProvider provider, IEnumerable<Route> routes) : IMiddleware
+
+public class RouterMiddleware(IServiceProvider provider, IEnumerable<Route> routes) : IMiddleware
 {
-    public async Task Invoke(Context context, UpdateDelegate next)
+    public async Task Handle(Context context, UpdateDelegate next)
     {
         var handled = false;
         
@@ -28,7 +30,8 @@ internal class RouterMiddleware(IServiceProvider provider, IEnumerable<Route> ro
         }
     }
 }
-internal class RouteBuilder(IServiceCollection services)
+
+public class RouteBuilder(IServiceCollection services)
 {
     private List<Route> _routes { get; } = [];
 
@@ -38,9 +41,9 @@ internal class RouteBuilder(IServiceCollection services)
 
     public RouteBuilder Callback<TRouteHandler>(Func<string, bool> predicate) where TRouteHandler : class, IRouteHandler => When<TRouteHandler>(context => context.Update.CallbackQuery is { Data: string data } && predicate(data));
 
-    public RouteBuilder When<TRouteHandler>(Func<Context, bool> predicate) where TRouteHandler : class, IRouteHandler
+    private RouteBuilder When<TRouteHandler>(Func<Context, bool> predicate) where TRouteHandler : class, IRouteHandler
     {
-        services.AddSingleton<TRouteHandler>();
+        services.AddScoped<TRouteHandler>();
         
         _routes.Add(async (provider, context) =>
         {
@@ -65,7 +68,7 @@ internal class RouteBuilder(IServiceCollection services)
     }
 }
 
-internal static class Routing_DependencyInjectionExtensions
+public static class Routing_DependencyInjectionExtensions
 {
     public static IServiceCollection AddRouting(this IServiceCollection services, Action<RouteBuilder> configure)
     {

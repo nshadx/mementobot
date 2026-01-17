@@ -2,6 +2,12 @@
 
 namespace mementobot.Services;
 
+public class Quiz
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = null!;
+}
+
 internal class QuizService(
     SqliteConnection connection
 )
@@ -30,7 +36,7 @@ internal class QuizService(
     
     public IEnumerable<int> GetPublishedQuizIds(SqliteTransaction? transaction = null)
     {
-        SqliteCommand command = new("""SELECT id FROM quizzes WHERE is_published""", connection, transaction);
+        SqliteCommand command = new("""SELECT id FROM quizzes WHERE is_published = TRUE""", connection, transaction);
         using (var reader = command.ExecuteReader())
         {
             while (reader.Read())
@@ -49,6 +55,21 @@ internal class QuizService(
             while (reader.Read())
             {
                 yield return reader.GetInt32(0);
+            }
+        }
+    }
+    
+    public IEnumerable<Quiz> GetUserQuizzes(int userId, SqliteTransaction? transaction = null)
+    {
+        SqliteCommand command = new("""SELECT id, name FROM quizzes WHERE user_id = @user_id""", connection, transaction);
+        command.Parameters.AddWithValue("@user_id", userId);
+        using (var reader = command.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                var id = reader.GetInt32(0);
+                var name = reader.GetString(1);
+                yield return new Quiz() { Id = id, Name = name };
             }
         }
     }
@@ -89,5 +110,10 @@ internal class QuizService(
 
         var answer = (string)command.ExecuteScalar()!;
         return answer;
+    }
+
+    public void AddQuizQuestion(int quizId, string question, string answer)
+    {
+        
     }
 }

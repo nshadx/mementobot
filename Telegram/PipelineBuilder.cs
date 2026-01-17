@@ -1,8 +1,8 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace mementobot.Middlewares;
+namespace mementobot.Telegram;
 
-internal class PipelineBuilder(IServiceCollection services, string? serviceKey = null)
+public class PipelineBuilder(IServiceCollection services)
 {
     private readonly List<Func<IServiceProvider, UpdateDelegate, UpdateDelegate>> _components = [];
 
@@ -16,14 +16,7 @@ internal class PipelineBuilder(IServiceCollection services, string? serviceKey =
 
     public void Build()
     {
-        if (serviceKey is null)
-        {
-            services.AddScoped(CreatePipeline);
-        }
-        else
-        {
-            services.AddKeyedScoped(serviceKey, (provider, _) => CreatePipeline(provider));
-        }
+        services.AddScoped(CreatePipeline);
     }
 
     private UpdateDelegate CreatePipeline(IServiceProvider provider)
@@ -41,7 +34,7 @@ internal class PipelineBuilder(IServiceCollection services, string? serviceKey =
         return async context =>
         {
             var instance = provider.GetRequiredService<TMiddleware>();
-            await instance.Invoke(context, next);
+            await instance.Handle(context, next);
         };
     }
 }

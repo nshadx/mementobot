@@ -5,13 +5,11 @@ using mementobot.Telegram;
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.AddTelegram();
-builder.AddAppPipeline();
 builder.AddServices();
 builder.AddDb();
 
 builder.RouteCommands();
-builder.RouteCallbacks();
-builder.RouteStates();
+builder.ConfigureAppPipeline();
 
 using (var app = builder.Build())
 {

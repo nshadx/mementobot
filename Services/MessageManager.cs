@@ -1,4 +1,5 @@
-﻿using Telegram.Bot;
+﻿using mementobot.Services;
+using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 
@@ -8,6 +9,32 @@ internal class MessageManager(
     ITelegramBotClient client
 )
 {
+    public Task DeleteMessage(long chatId, int messageId)
+    {
+        return client.DeleteMessage(
+            chatId: chatId,
+            messageId: messageId
+        );
+    }
+    
+    public async Task<int> EnterQuestionMessage(long chatId)
+    {
+        var message = await client.SendMessage(
+            chatId: chatId,
+            text: "Введи название вопроса"
+        );
+        return message.Id;
+    }
+    
+    public async Task<int> EnterAnswerMessage(long chatId)
+    {
+        var message = await client.SendMessage(
+            chatId: chatId,
+            text: "Введи ответ к вопрсоу"
+        );
+        return message.Id;
+    }
+    
     public async Task<int> CreateNewQuizMessage(long chatId)
     {
         var message = await client.SendMessage(
@@ -19,7 +46,7 @@ internal class MessageManager(
     
     public async Task<int> SelectPollMessage(
         long chatId,
-        IReadOnlyCollection<(int Id, string Name)> quizzes,
+        IReadOnlyCollection<Quiz> quizzes,
         int? editMessageId = null
     )
     {
