@@ -11,7 +11,7 @@ internal static class ProgramDependencyInjectionExtensions
         {
             builder.Services.AddRouting(builder =>
             {
-                //builder.Command<StartQuizCommandHandler>("/start");
+                builder.Command<StartQuizCommandHandler>("/start");
                 builder.Command<CreateNewQuizCommandHandler>("/new");
                 builder.Command<PublishQuizCommandHandler>("/publish");
                 builder.Command<AddQuizQuestionCommandHandler>("/add");

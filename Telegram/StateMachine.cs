@@ -528,7 +528,7 @@ public class TransitionStateMachineActivity<TInstance>(State<TInstance> toState,
     public async Task Execute(BehaviorContext<TInstance> context, IBehavior<TInstance> next)
     {
         var currentState = await stateAccessor.Get(context);
-        if (currentState == toState || currentState is null)
+        if (currentState is null)
         {
             return;
         }

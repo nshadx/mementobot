@@ -8,20 +8,31 @@ public class Quiz
     public string Name { get; set; } = null!;
 }
 
+public class QuizQuestion
+{
+    public int Id { get; set; }
+    public string Question { get; set; } = null!;
+    public string Answer { get; set; } = null!;
+}
+
 internal class QuizService(
     SqliteConnection connection
 )
 {
-    public IEnumerable<int> GetQuizQuestionIds(int quizId, SqliteTransaction? transaction = null)
+    public IEnumerable<QuizQuestion> GetQuizQuestions(int quizId, SqliteTransaction? transaction = null)
     {
-        SqliteCommand command = new("""SELECT id FROM quiz_questions WHERE quiz_id = @quiz_id""", connection, transaction);
+        SqliteCommand command = new("""SELECT id, question, answer FROM quiz_questions WHERE quiz_id = @quiz_id""", connection, transaction);
         command.Parameters.AddWithValue("@quiz_id", quizId);
         
         using (var reader = command.ExecuteReader())
         {
             while (reader.Read())
             {
-                yield return reader.GetInt32(0);
+                var id = reader.GetInt32(0);
+                var question = reader.GetString(1);
+                var answer = reader.GetString(2);
+
+                yield return new() { Id =  id, Question = question, Answer = answer };
             }
         }
     }
