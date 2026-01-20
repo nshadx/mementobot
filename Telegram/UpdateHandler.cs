@@ -29,54 +29,104 @@ namespace mementobot.Telegram
             logger.LogInformation("Received: {updateType}", update.Type);
 
             var chatId = update.GetChatId();
-            var instance = memoryCache.Get($"{chatId}-instance");
-            if (instance is null)
-            {
-                var stateMachine = stateMachines.SingleOrDefault(x => x.InitialEvents.Any(x => x.Condition(update)));
-                if (stateMachine is not null)
-                {
-                    var @event = stateMachine.InitialEvents.Single(x => x.Condition(update));
-                    var stateMachineType = stateMachine.GetType();
-                    if (stateMachineType.BaseType!.IsGenericType && stateMachineType.BaseType.GetGenericTypeDefinition() == typeof(StateMachine<>))
-                    {
-                        var instanceType = stateMachineType.BaseType.GetGenericArguments()[0];
-                        instance = Activator.CreateInstance(instanceType);
-                    }
+            var cacheKey = $"{chatId}-instance";
 
-                    memoryCache.Set($"{chatId}-instance", instance);
+            var instance = memoryCache.Get(cacheKey);
 
-                    var context = (BehaviorContext)Activator.CreateInstance(typeof(BehaviorContext<>).MakeGenericType(instance!.GetType()), serviceProvider, instance, @event, update)!;
-                    await stateMachine.RaiseEvent(context);
-                    if (context.IsCompleted)
-                    {
-                        memoryCache.Remove($"{chatId}-instance");
-                    }
-                }
-                else
-                {
-                    Context context = new(update);
-                    await pipeline(context);
-                }
-            }
-            else
-            {
-                var stateMachine = stateMachines.SingleOrDefault(x => x.GetType().BaseType!.IsGenericType && x.GetType().BaseType!.GetGenericArguments()[0] == instance.GetType() && x.Events.Any(x => x.Condition(update)));
-                if (stateMachine is not null)
-                {
-                    var @event = stateMachine.Events.Single(x => x.Condition(update));
-                    var context = (BehaviorContext)Activator.CreateInstance(typeof(BehaviorContext<>).MakeGenericType(instance.GetType()), serviceProvider, instance, @event, update)!;
-                    await stateMachine.RaiseEvent(context);
-                    if (context.IsCompleted)
-                    {
-                        memoryCache.Remove($"{chatId}-instance");
-                    }
-                }
-                else
-                {
-                    Context context = new(update);
-                    await pipeline(context);   
-                }
-            }
+            // 1. Initial event
+            var newInstance = await TryHandleInitialEvent(update, cacheKey);
+            if (newInstance is not null)
+                return;
+
+            // 2. Existing state machine
+            if (instance is not null && await TryHandleExistingInstance(update, cacheKey, instance))
+                return;
+
+            // 3. Fallback
+            await pipeline(new Context(update));
         }
+
+        private async Task<object?> TryHandleInitialEvent(
+            Update update,
+            string cacheKey
+        )
+        {
+            var stateMachine = stateMachines
+                .SingleOrDefault(sm => sm.InitialEvents.Any(e => e.Condition(update)));
+
+            if (stateMachine is null)
+                return null;
+
+            var @event = stateMachine.InitialEvents.Single(e => e.Condition(update));
+
+            var instanceType = GetInstanceType(stateMachine);
+            if (instanceType is null)
+                return null;
+
+            var instance = Activator.CreateInstance(instanceType)!;
+            memoryCache.Set(cacheKey, instance);
+
+            await HandleEvent(stateMachine, instance, @event, update, cacheKey);
+
+            return instance;
+        }
+
+        private async Task<bool> TryHandleExistingInstance(
+            Update update,
+            string cacheKey,
+            object instance
+        )
+        {
+            var stateMachine = stateMachines.SingleOrDefault(sm =>
+                GetInstanceType(sm) == instance.GetType() &&
+                sm.Events.Any(e => e.Condition(update))
+            );
+
+            if (stateMachine is null)
+                return false;
+
+            var @event = stateMachine.Events.Single(e => e.Condition(update));
+
+            memoryCache.Set(cacheKey, instance);
+
+            await HandleEvent(stateMachine, instance, @event, update, cacheKey);
+
+            return true;
+        }
+        
+        private async Task HandleEvent(
+            IStateMachine stateMachine,
+            object instance,
+            Event @event,
+            Update update,
+            string cacheKey
+        )
+        {
+            var context = CreateContext(stateMachine, instance, @event, update);
+
+            await stateMachine.RaiseEvent(context);
+
+            if (context.IsCompleted)
+                memoryCache.Remove(cacheKey);
+        }
+
+        private static Type? GetInstanceType(IStateMachine stateMachine)
+        {
+            var baseType = stateMachine.GetType().BaseType;
+
+            if (baseType is null || !baseType.IsGenericType)
+                return null;
+
+            return baseType.GetGenericTypeDefinition() == typeof(StateMachine<>)
+                ? baseType.GetGenericArguments()[0]
+                : null;
+        }
+
+        private BehaviorContext CreateContext(
+            IStateMachine stateMachine,
+            object instance,
+            Event @event,
+            Update update
+        ) => (BehaviorContext)Activator.CreateInstance(typeof(BehaviorContext<>).MakeGenericType(instance.GetType()), serviceProvider, instance, @event, update)!;
     }
 }
