@@ -74,6 +74,13 @@ internal class QuizService(
     
     public void AddQuizQuestion(int quizId, string question, string answer)
     {
-        
+        SqliteCommand command = new("""
+                                    INSERT INTO quiz_questions(quiz_id, question, answer) VALUES (@quiz_id, @question, @answer)
+                                    """, connection);
+        command.Parameters.AddWithValue("@quiz_id", quizId);
+        command.Parameters.AddWithValue("@question", question);
+        command.Parameters.AddWithValue("@answer", answer);
+
+        command.ExecuteNonQuery();
     }
 }
