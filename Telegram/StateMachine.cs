@@ -5,6 +5,11 @@ using Telegram.Bot.Types;
 namespace mementobot.Telegram;
 
 /*
+ * Философия реализации стейт-машины масстранзита в том, что она регистрируется как сервис и задает исключительно поведение (оно определеяется конструктором, импл. стейт-машину)
+ * Все непосредственные шаги стейт-машины завязаны на BehaviorContext & TInstance. Потому один из главных классов тут - IntStateAccessor/IStateAccessor.
+ */
+
+/*
  * Событие стейт-машины. Является ее синглтоном, просто задает некий триггер.
  */
 public class Event(string name, Func<Update, bool> condition)
