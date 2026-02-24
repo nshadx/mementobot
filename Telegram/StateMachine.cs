@@ -1,4 +1,4 @@
-﻿using System.Linq.Expressions;
+using System.Linq.Expressions;
 using System.Reflection;
 using Telegram.Bot.Types;
 
@@ -12,10 +12,13 @@ namespace mementobot.Telegram;
 /*
  * Событие стейт-машины. Является ее синглтоном, просто задает некий триггер.
  */
-public class Event(string name, Func<Update, bool> condition)
+public class Event
 {
-    public string Name { get; } = name;
-    public Func<Update, bool> Condition { get; } = condition;
+    public string Name { get; }
+    public Func<Update, bool>? Condition { get; }
+
+    public Event(string name) { Name = name; }
+    public Event(string name, Func<Update, bool> condition) { Name = name; Condition = condition; }
 }
 
 /*
@@ -26,6 +29,7 @@ public class State<TInstance> where TInstance : class
     private readonly Dictionary<Event, ActivityBehaviorBuilder<TInstance>> _behaviors = [];
     private readonly HashSet<Event> _ignoredEvents = [];
     private readonly HashSet<Event> _events = [];
+    private readonly IEventObserver<TInstance> _observer;
     
     public string Name { get; }
     
@@ -34,12 +38,12 @@ public class State<TInstance> where TInstance : class
 
     public IReadOnlyCollection<Event> Events => _events;
 
-    public State(string name)
+    public State(string name, IEventObserver<TInstance> observer)
     {
+        _observer = observer;
         Name = name;
-        
-        Enter = new("Enter", _ => true);
-        Leave = new("Leave", _ => true);
+        Enter = new($"{name}.Enter");
+        Leave = new($"{name}.Leave");
     }
     
     public void Bind(Event @event, IStateMachineActivity<TInstance> activity)
@@ -68,6 +72,7 @@ public class State<TInstance> where TInstance : class
                 return;
             }
 
+            await _observer.Execute(context);
             await behavior.Execute(context);
         }
     }
@@ -131,6 +136,7 @@ public class ActivityBehavior<TInstance>(IStateMachineActivity<TInstance> activi
  */
 public interface IStateAccessor<TInstance> where TInstance : class
 {
+    State<TInstance>? GetState(TInstance instance);
     Task<State<TInstance>?> Get(BehaviorContext<TInstance> context);
     Task Set(BehaviorContext<TInstance> context, State<TInstance> state);
 }
@@ -189,15 +195,9 @@ public interface IStateAccessor<TInstance> where TInstance : class
  */
 public class DefaultStateAccessor<TInstance> : IStateAccessor<TInstance> where TInstance : class
 {
-    public Task<State<TInstance>?> Get(BehaviorContext<TInstance> context)
-    {
-        return Task.FromResult<State<TInstance>?>(null);
-    }
-
-    public Task Set(BehaviorContext<TInstance> context, State<TInstance> state)
-    {
-        return Task.CompletedTask;
-    }
+    public State<TInstance>? GetState(TInstance instance) => null;
+    public Task<State<TInstance>?> Get(BehaviorContext<TInstance> context) => Task.FromResult<State<TInstance>?>(null);
+    public Task Set(BehaviorContext<TInstance> context, State<TInstance> state) => Task.CompletedTask;
 }
 
 /*
@@ -216,6 +216,8 @@ public class InitialIfNullStateAccessor<TInstance> : IStateAccessor<TInstance> w
         _stateAccessor = stateAccessor;
     }
     
+    public State<TInstance>? GetState(TInstance instance) => _stateAccessor.GetState(instance);
+
     public async Task<State<TInstance>?> Get(BehaviorContext<TInstance> context)
     {
         var state = await _stateAccessor.Get(context);
@@ -224,14 +226,12 @@ public class InitialIfNullStateAccessor<TInstance> : IStateAccessor<TInstance> w
             await _initialBehavior.Execute(context);
             state = await _stateAccessor.Get(context);
         }
-        
+
         return state;
     }
 
     public Task Set(BehaviorContext<TInstance> context, State<TInstance> state)
-    {
-        return _stateAccessor.Set(context, state);
-    }
+        => _stateAccessor.Set(context, state);
 }
 
 /*
@@ -239,6 +239,8 @@ public class InitialIfNullStateAccessor<TInstance> : IStateAccessor<TInstance> w
  */
 public class IntStateAccessor<TInstance>(Expression<Func<TInstance, int>> expression, StateAccessorIndex<TInstance> index) : IStateAccessor<TInstance> where TInstance : class
 {
+    public State<TInstance> GetState(TInstance instance) => index[Read(instance)];
+
     public Task<State<TInstance>?> Get(BehaviorContext<TInstance> context)
     {
         var stateIndex = Read(context.Instance);
@@ -287,25 +289,69 @@ public class StateAccessorIndex<TInstance>(State<TInstance> initial, State<TInst
 
 public interface IStateMachine
 {
-    IReadOnlyCollection<Event> Events { get; }
-    IReadOnlyCollection<Event> InitialEvents { get; }
+    Event? FindInitialEvent(Update update);
+    Event? FindApplicableEvent(Update update, object instance);
     Task RaiseEvent(BehaviorContext context);
+}
+
+public interface IEventObserver<TInstance> where TInstance : class
+{
+    Task Execute(BehaviorContext<TInstance> context);
+}
+
+public class EventObservable<TInstance> : IEventObserver<TInstance> where TInstance : class
+{
+    private readonly List<IEventObserver<TInstance>> _observers = [];
+
+    public void Connect(IEventObserver<TInstance> observer)
+    {
+        _observers.Add(observer);
+    }
+    
+    public async Task Execute(BehaviorContext<TInstance> context)
+    {
+        foreach (var observer in _observers)
+        {
+            await observer.Execute(context);
+        }
+    }
 }
 
 public class StateMachine<TInstance> : IStateMachine where TInstance : class
 {
     private readonly List<Event> _events = [];
-    
-    protected State<TInstance> Final { get; }
-    protected State<TInstance> Initial { get; }
+    private readonly EventObservable<TInstance> _observer = new();
+    private readonly List<SubStateMachineDescriptor<TInstance>> _subStateMachines = [];
+    private readonly Dictionary<object, SubStateMachineDescriptor<TInstance>> _subMachineDescriptors = [];
+
+    public State<TInstance> Final { get; }
+    public State<TInstance> Initial { get; }
 
     public IStateAccessor<TInstance> StateAccessor { get; private set; }
 
     protected StateMachine()
     {
-        Final = new("Final");
-        Initial = new("Initial");
+        Final = new("Final", _observer);
+        Initial = new("Initial", _observer);
         StateAccessor = new DefaultStateAccessor<TInstance>();
+    }
+
+    internal void RegisterSubStateMachine<TSubInstance>(
+        StateMachine<TSubInstance> subStateMachine,
+        Expression<Func<TInstance, TSubInstance?>> subInstanceAccessor)
+        where TSubInstance : class
+    {
+        var descriptor = SubStateMachineDescriptor<TInstance>.Create(subStateMachine, subInstanceAccessor);
+        _subStateMachines.Add(descriptor);
+        _subMachineDescriptors[subStateMachine] = descriptor;
+    }
+    
+    internal IStateMachineActivity<TInstance> CreateSubActivateActivity<TSubInstance>(
+        StateMachine<TSubInstance> subMachine,
+        State<TSubInstance> subState) where TSubInstance : class
+    {
+        var descriptor = (SubStateMachineDescriptorImpl<TInstance, TSubInstance>)_subMachineDescriptors[subMachine];
+        return descriptor.CreateActivateActivity(subState);
     }
     
     // public void ScheduleEvent(Event @event)
@@ -326,16 +372,42 @@ public class StateMachine<TInstance> : IStateMachine where TInstance : class
     //     }
     // }
 
-    public IReadOnlyCollection<Event> Events => _events;
+    public Event? FindInitialEvent(Update update) =>
+        Initial.Events
+            .Where(e => e != Initial.Enter && e != Initial.Leave)
+            .FirstOrDefault(e => e.Condition?.Invoke(update) ?? false);
 
-    public IReadOnlyCollection<Event> InitialEvents => Initial.Events;
+    public Event? FindApplicableEvent(Update update, object instance)
+    {
+        if (instance is not TInstance typedInstance)
+            return null;
+
+        var activeSub = _subStateMachines.FirstOrDefault(d => d.IsActive(typedInstance));
+        if (activeSub is not null)
+            return activeSub.FindApplicableEvent(update, typedInstance);
+
+        var candidates = StateAccessor.GetState(typedInstance)?.Events ?? _events;
+        return candidates.FirstOrDefault(e => e.Condition?.Invoke(update) ?? false);
+    }
 
     public async Task RaiseEvent(BehaviorContext context)
     {
         if (context is BehaviorContext<TInstance> genericContext)
         {
             genericContext.StateMachine = this;
-            
+
+            foreach (var descriptor in _subStateMachines)
+                descriptor.EnsureSubInstanceInitialized(genericContext.Instance);
+
+            foreach (var descriptor in _subStateMachines)
+            {
+                var handled = await descriptor.TryRaiseEvent(genericContext);
+                if (handled)
+                {
+                    return;
+                }
+            }
+
             var currentState = await StateAccessor.Get(genericContext);
             if (currentState is not null)
             {
@@ -344,6 +416,22 @@ public class StateMachine<TInstance> : IStateMachine where TInstance : class
         }
     }
 
+    protected void ConfigureStateMachine<TStateMachine, TOtherInstance>(
+        TStateMachine stateMachine,
+        Expression<Func<TInstance, TOtherInstance?>> stateAccessor
+    ) where TOtherInstance : class where TStateMachine : StateMachine<TOtherInstance>
+    {
+        RegisterSubStateMachine(stateMachine, stateAccessor);
+    }
+
+    protected SubEventActivityBinder<TInstance, TSubInstance> When<TSubInstance>(
+        StateMachine<TSubInstance> subMachine,
+        Event subEvent) where TSubInstance : class
+    {
+        var descriptor = _subMachineDescriptors[subMachine];
+        return new SubEventActivityBinder<TInstance, TSubInstance>(this, descriptor, subEvent);
+    }
+    
     protected void SetCompletedOnFinal()
     {
         During(Final, When(Final.Enter).Then(context =>
@@ -359,7 +447,7 @@ public class StateMachine<TInstance> : IStateMachine where TInstance : class
         foreach (var expression in stateAccessors)
         {
             var propertyInfo = (PropertyInfo)((MemberExpression)expression.Body).Member;
-            State<TInstance> state = new(propertyInfo.Name); 
+            State<TInstance> state = new(propertyInfo.Name, _observer); 
             propertyInfo.SetValue(this, state);
             stateList.Add(state);
         }
@@ -406,7 +494,7 @@ public class StateMachine<TInstance> : IStateMachine where TInstance : class
         return new EventActivityBinder<TInstance>(this, @event);
     }
 
-    private void BindActivitiesToState(State<TInstance> state, IEnumerable<IActivityBinder<TInstance>> activityBinders)
+    private static void BindActivitiesToState(State<TInstance> state, IEnumerable<IActivityBinder<TInstance>> activityBinders)
     {
         foreach (var binder in activityBinders)
         {
@@ -425,6 +513,7 @@ public class BehaviorContext(IServiceProvider serviceProvider, Event @event, Upd
     public Event Event { get; set; } = @event;
     public Update Update { get; set; } = update;
     public IServiceProvider ServiceProvider { get; } = serviceProvider;
+    public BehaviorContext? ParentContext { get; set; }
 }
 
 public class BehaviorContext<TInstance>(IServiceProvider serviceProvider, TInstance instance, Event @event, Update update) : BehaviorContext(serviceProvider, @event, update) where TInstance : class
@@ -541,7 +630,7 @@ public class TransitionStateMachineActivity<TInstance>(State<TInstance> toState,
 
         context.Event = currentState.Leave;
         await currentState.Raise(context);
-        // в названии этого метода упущено слова CurrentState, что подразумевает следующее: приватные методы обращены в некий скоуп, который в данном случае является непосредственно _toState
+        // в названии этого метода упущено слово CurrentState, что подразумевает следующее: приватные методы обращены в некий скоуп, который в данном случае является непосредственно _toState
         await stateAccessor.Set(context, toState);
         context.Event = toState.Enter;
         await toState.Raise(context);
@@ -549,6 +638,202 @@ public class TransitionStateMachineActivity<TInstance>(State<TInstance> toState,
         await next.Execute(context);
     }
 }
+
+/*
+ * Дескриптор вложенной стейт-машины, хранит информацию о вложенной стейт-машине
+ */
+public abstract class SubStateMachineDescriptor<TInstance> where TInstance : class
+{
+    public abstract Event? FindApplicableEvent(Update update, TInstance parentInstance);
+    public abstract bool IsActive(TInstance parentInstance);
+    public abstract Task<bool> TryRaiseEvent(BehaviorContext<TInstance> parentContext);
+    public abstract void AddEpilogue(Event subEvent, IStateMachineActivity<TInstance> activity);
+    public abstract void EnsureSubInstanceInitialized(TInstance parentInstance);
+
+    public static SubStateMachineDescriptor<TInstance> Create<TSubInstance>(
+        StateMachine<TSubInstance> subStateMachine,
+        Expression<Func<TInstance, TSubInstance?>> subInstanceAccessor)
+        where TSubInstance : class
+    {
+        return new SubStateMachineDescriptorImpl<TInstance, TSubInstance>(
+            subStateMachine,
+            subInstanceAccessor
+        );
+    }
+}
+
+public class SubStateMachineDescriptorImpl<TInstance, TSubInstance> : SubStateMachineDescriptor<TInstance>
+    where TInstance : class
+    where TSubInstance : class
+{
+    private readonly StateMachine<TSubInstance> _subStateMachine;
+    private readonly Expression<Func<TInstance, TSubInstance?>> _subInstanceAccessorExpression;
+    private readonly Func<TInstance, TSubInstance?> _subInstanceAccessor;
+    private readonly List<(Event subEvent, IStateMachineActivity<TInstance> activity)> _epilogues = [];
+
+    public SubStateMachineDescriptorImpl(
+        StateMachine<TSubInstance> subStateMachine,
+        Expression<Func<TInstance, TSubInstance?>> subInstanceAccessor)
+    {
+        _subStateMachine = subStateMachine;
+        _subInstanceAccessorExpression = subInstanceAccessor;
+        _subInstanceAccessor = subInstanceAccessor.Compile();
+    }
+
+    public override Event? FindApplicableEvent(Update update, TInstance parentInstance)
+    {
+        var subInstance = _subInstanceAccessor(parentInstance);
+        return subInstance is not null ? _subStateMachine.FindApplicableEvent(update, subInstance) : null;
+    }
+
+    public override bool IsActive(TInstance parentInstance)
+    {
+        var subInstance = _subInstanceAccessor(parentInstance);
+        if (subInstance is null)
+            return false;
+        var state = _subStateMachine.StateAccessor.GetState(subInstance);
+        return state != _subStateMachine.Initial && state != _subStateMachine.Final;
+    }
+
+    public override void AddEpilogue(Event subEvent, IStateMachineActivity<TInstance> activity)
+        => _epilogues.Add((subEvent, activity));
+
+    public override void EnsureSubInstanceInitialized(TInstance parentInstance)
+    {
+        if (_subInstanceAccessor(parentInstance) is not null)
+            return;
+        var subInstance = Activator.CreateInstance<TSubInstance>();
+        var propertyInfo = (PropertyInfo)((MemberExpression)_subInstanceAccessorExpression.Body).Member;
+        propertyInfo.SetValue(parentInstance, subInstance);
+    }
+
+    public IStateMachineActivity<TInstance> CreateActivateActivity(State<TSubInstance> targetState)
+        => new ActivateSubStateMachineActivity<TInstance, TSubInstance>(
+            targetState,
+            _subStateMachine.StateAccessor,
+            _subInstanceAccessorExpression
+        );
+
+    public override async Task<bool> TryRaiseEvent(BehaviorContext<TInstance> parentContext)
+    {
+        var subInstance = _subInstanceAccessor(parentContext.Instance);
+        if (subInstance is null)
+            return false;
+        var subContext = new BehaviorContext<TSubInstance>(
+            parentContext.ServiceProvider,
+            subInstance,
+            parentContext.Event,
+            parentContext.Update
+        ) { ParentContext = parentContext };
+
+        var state = await _subStateMachine.StateAccessor.Get(subContext);
+        if (state is null || state == _subStateMachine.Initial || state == _subStateMachine.Final)
+            return false;
+
+        await _subStateMachine.RaiseEvent(subContext);
+
+        // Эпилог: реакции родителя, синхронно в том же call stack
+        var finalEnter = _subStateMachine.Final.Enter;
+        var finalLeave = _subStateMachine.Final.Leave;
+        foreach (var (subEvent, activity) in _epilogues)
+        {
+            var shouldFire = subEvent == finalEnter || subEvent == finalLeave
+                ? subContext.IsCompleted
+                : parentContext.Event == subEvent;
+
+            if (shouldFire)
+                await activity.Execute(parentContext, new EmptyBehavior<TInstance>());
+        }
+
+        return true;
+    }
+}
+
+/*
+ * SubEventActivityBinder - fluent builder для реакции родительской машины на события вложенной.
+ * Активности регистрируются как эпилог в дескрипторе и выполняются синхронно после RaiseEvent вложенной.
+ */
+public class SubEventActivityBinder<TInstance, TSubInstance>
+    where TInstance : class
+    where TSubInstance : class
+{
+    private readonly StateMachine<TInstance> _parentMachine;
+    private readonly SubStateMachineDescriptor<TInstance> _descriptor;
+    private readonly Event _subEvent;
+
+    internal SubEventActivityBinder(
+        StateMachine<TInstance> parentMachine,
+        SubStateMachineDescriptor<TInstance> descriptor,
+        Event subEvent)
+    {
+        _parentMachine = parentMachine;
+        _descriptor = descriptor;
+        _subEvent = subEvent;
+    }
+
+    public SubEventActivityBinder<TInstance, TSubInstance> TransitionTo(State<TInstance> state)
+        => Add(new TransitionStateMachineActivity<TInstance>(state, _parentMachine.StateAccessor));
+
+    public SubEventActivityBinder<TInstance, TSubInstance> Then(Func<BehaviorContext<TInstance>, Task> action)
+        => Add(new ActionStateMachineActivity<TInstance>(action));
+
+    private SubEventActivityBinder<TInstance, TSubInstance> Add(IStateMachineActivity<TInstance> activity)
+    {
+        _descriptor.AddEpilogue(_subEvent, activity);
+        return this;
+    }
+}
+
+/*
+ * Активность для перехода к произвольному состоянию вложенной стейт-машины.
+ * Создаёт sub-instance если null, выставляет указанное состояние и поднимает его Enter.
+ * TransitionTo(sub.Initial.Enter) и TransitionTo(sub, sub.SomeState) оба создают эту активность.
+ */
+public class ActivateSubStateMachineActivity<TInstance, TSubInstance> : IStateMachineActivity<TInstance>
+    where TInstance : class
+    where TSubInstance : class
+{
+    private readonly State<TSubInstance> _targetState;
+    private readonly IStateAccessor<TSubInstance> _subStateAccessor;
+    private readonly Expression<Func<TInstance, TSubInstance?>> _subInstanceAccessor;
+    private readonly Func<TInstance, TSubInstance?> _subInstanceAccessorCompiled;
+
+    public ActivateSubStateMachineActivity(
+        State<TSubInstance> targetState,
+        IStateAccessor<TSubInstance> subStateAccessor,
+        Expression<Func<TInstance, TSubInstance?>> subInstanceAccessor
+    )
+    {
+        _targetState = targetState;
+        _subStateAccessor = subStateAccessor;
+        _subInstanceAccessor = subInstanceAccessor;
+        _subInstanceAccessorCompiled = subInstanceAccessor.Compile();
+    }
+
+    public async Task Execute(BehaviorContext<TInstance> context, IBehavior<TInstance> next)
+    {
+        var subInstance = _subInstanceAccessorCompiled(context.Instance);
+        if (subInstance is null)
+        {
+            subInstance = Activator.CreateInstance<TSubInstance>();
+            var propertyInfo = (PropertyInfo)((MemberExpression)_subInstanceAccessor.Body).Member;
+            propertyInfo.SetValue(context.Instance, subInstance);
+        }
+
+        var subContext = new BehaviorContext<TSubInstance>(
+            context.ServiceProvider,
+            subInstance,
+            _targetState.Enter,
+            context.Update
+        ) { ParentContext = context };
+
+        await _subStateAccessor.Set(subContext, _targetState);
+        await _targetState.Raise(subContext);
+
+        await next.Execute(context);
+    }
+}
+
 
 public static class EventActivityBinderExtensions
 {
@@ -563,6 +848,15 @@ public static class EventActivityBinderExtensions
         {
             return binder.Add(new TransitionStateMachineActivity<TInstance>(state, binder.StateMachine.StateAccessor));
         }
+        
+        public EventActivityBinder<TInstance> TransitionTo<TSubInstance>(
+            StateMachine<TSubInstance> subMachine,
+            State<TSubInstance> subState
+        ) where TSubInstance : class
+        {
+            var activity = binder.StateMachine.CreateSubActivateActivity(subMachine, subState);
+            return binder.Add(activity);
+        }
     }
 }
 
@@ -570,7 +864,7 @@ public static class BehaviorContextExtensions
 {
     extension<TInstance>(BehaviorContext<TInstance> context) where TInstance : class
     {
-        public async Task TransitionToState(State<TInstance> toState)
+        public async Task TransitionTo(State<TInstance> toState)
         {
             var stateAccessor = context.StateMachine.StateAccessor;
             TransitionStateMachineActivity<TInstance> activity = new(toState, stateAccessor);

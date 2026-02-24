@@ -20,6 +20,8 @@ internal static class ProgramDependencyInjectionExtensions
 
         public IHostApplicationBuilder RouteStateMachines()
         {
+            builder.Services.AddSingleton<QuizPickingStateMachine>();
+            
             builder.AddStateMachine<AddQuizQuestionStateMachine, AddQuizQuestionState>();
             builder.AddStateMachine<PublishQuizStateMachine, PublishQuizState>();
             builder.AddStateMachine<QuizProgressStateMachine, QuizProgressState>();

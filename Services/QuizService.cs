@@ -53,6 +53,18 @@ internal class QuizService(
         }
     }
         
+    public IEnumerable<Quiz> GetAllPublishedQuizzes(SqliteTransaction? transaction = null)
+    {
+        SqliteCommand command = new("""SELECT id, name FROM quizzes WHERE is_published IS TRUE""", connection, transaction);
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            var id = reader.GetInt32(0);
+            var name = reader.GetString(1);
+            yield return new Quiz() { Id = id, Name = name };
+        }
+    }
+
     public void PublishQuiz(int quizId, SqliteTransaction? transaction = null)
     {
         SqliteCommand command = new("""UPDATE quizzes SET is_published = true WHERE id = @id""", connection, transaction);
