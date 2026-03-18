@@ -1,12 +1,12 @@
 using mementobot.Services;
 using mementobot.Telegram;
-using Telegram.Bot;
+using mementobot.Telegram.StateMachine;
 
 namespace mementobot.StateMachines;
 
-public readonly record struct QuizPage(Quiz Quiz, int Page);
+internal readonly record struct QuizPage(Quiz Quiz, int Page);
 
-public class QuizPickingState
+internal class QuizPickingState
 {
     public bool Published { get; set; }
     public bool OnlyCurrentUser { get; set; } = true;
@@ -20,7 +20,7 @@ public class QuizPickingState
     public int CurrentState { get; set; }
 }
 
-public class QuizPickingStateMachine : StateMachine<QuizPickingState>
+internal class QuizPickingStateMachine : StateMachine<QuizPickingState>
 {
     public Event PageForwardEvent { get; private set; } = null!;
     public Event PageBackwardEvent { get; private set; } = null!;
@@ -48,9 +48,10 @@ public class QuizPickingStateMachine : StateMachine<QuizPickingState>
                     var userId = userService.GetOrCreateUser(
                         telegramId: chatId
                     );
-                    var quizzes = context.Instance.OnlyCurrentUser
-                        ? quizService.GetUserQuizzes(userId: userId, published: context.Instance.Published)
-                        : quizService.GetAllPublishedQuizzes();
+                    var quizzes = quizService.GetQuizzes(
+                        published: context.Instance.Published,
+                        userId: context.Instance.OnlyCurrentUser ? userId : null
+                    );
 
                     var list = context.Instance.Quizzes;
                     var counter = 1;
@@ -81,6 +82,7 @@ public class QuizPickingStateMachine : StateMachine<QuizPickingState>
                         quizzes: firstPageQuizzes
                     );
                     context.Instance.MessageId = messageId;
+                    
                     if (list.Count == 0)
                     {
                         context.IsCompleted = true;
@@ -96,11 +98,6 @@ public class QuizPickingStateMachine : StateMachine<QuizPickingState>
             When(PageForwardEvent)
                 .Then(async context =>
                 {
-                    var client = context.ServiceProvider.GetRequiredService<ITelegramBotClient>();
-                    await client.AnswerCallbackQuery(
-                        callbackQueryId: context.Update.CallbackQuery!.Id
-                    );
-        
                     var page = context.Instance.Page;
                     if (++page > context.Instance.Quizzes.Max(x => x.Page))
                     {
@@ -115,11 +112,6 @@ public class QuizPickingStateMachine : StateMachine<QuizPickingState>
             When(PageBackwardEvent)
                 .Then(async context =>
                 {
-                    var client = context.ServiceProvider.GetRequiredService<ITelegramBotClient>();
-                    await client.AnswerCallbackQuery(
-                        callbackQueryId: context.Update.CallbackQuery!.Id
-                    );
-        
                     var page = context.Instance.Page;
                     if (--page < context.Instance.Quizzes.Min(x => x.Page))
                     {
@@ -134,19 +126,18 @@ public class QuizPickingStateMachine : StateMachine<QuizPickingState>
             When(QuizPickedEvent)
                 .Then(async context =>
                 {
-                    var client = context.ServiceProvider.GetRequiredService<ITelegramBotClient>();
-        
+                    if (context.Update is not { CallbackQuery.Data: { } data })
+                    {
+                        throw new InvalidOperationException("No quiz id");
+                    }
+                    
+                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+
                     var chatId = context.Update.GetChatId();
-                    var quizId = int.Parse(context.Update.CallbackQuery?.Data!);
+                    var quizId = int.Parse(data);
                     context.Instance.QuizId = quizId;
-        
-                    await client.AnswerCallbackQuery(
-                        callbackQueryId: context.Update.CallbackQuery!.Id
-                    );
-                    await client.DeleteMessage(
-                        chatId: chatId,
-                        messageId: context.Instance.MessageId
-                    );
+
+                    await messageManager.DeleteMessage(chatId, context.Instance.MessageId);
                 })
                 .TransitionTo(Final)
         );

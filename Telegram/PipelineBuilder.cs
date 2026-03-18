@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace mementobot.Telegram;
 
-public class PipelineBuilder(IServiceCollection services)
+internal class PipelineBuilder(IServiceCollection services)
 {
     private readonly List<Func<IServiceProvider, UpdateDelegate, UpdateDelegate>> _components = [];
 

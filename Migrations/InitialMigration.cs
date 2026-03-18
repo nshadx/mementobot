@@ -3,7 +3,7 @@
 namespace mementobot.Migrations;
 
 [Migration(version: 20260106)]
-public class InitialMigration : Migration
+internal class InitialMigration : Migration
 {
     public override void Up()
     {

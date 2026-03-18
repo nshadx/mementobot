@@ -2,13 +2,13 @@
 
 namespace mementobot.Services;
 
-public class Quiz
+internal class Quiz
 {
     public int Id { get; set; }
     public string Name { get; set; } = null!;
 }
 
-public class QuizQuestion
+internal class QuizQuestion
 {
     public int Id { get; set; }
     public string Question { get; set; } = null!;
@@ -24,44 +24,30 @@ internal class QuizService(
         SqliteCommand command = new("""SELECT id, question, answer FROM quiz_questions WHERE quiz_id = @quiz_id""", connection, transaction);
         command.Parameters.AddWithValue("@quiz_id", quizId);
         
-        using (var reader = command.ExecuteReader())
-        {
-            while (reader.Read())
-            {
-                var id = reader.GetInt32(0);
-                var question = reader.GetString(1);
-                var answer = reader.GetString(2);
-
-                yield return new() { Id =  id, Question = question, Answer = answer };
-            }
-        }
-    }
-    
-    public IEnumerable<Quiz> GetUserQuizzes(int userId, bool published, SqliteTransaction? transaction = null)
-    {
-        SqliteCommand command = new("""SELECT id, name FROM quizzes WHERE user_id = @user_id AND is_published IS @published""", connection, transaction);
-        command.Parameters.AddWithValue("@user_id", userId);
-        command.Parameters.AddWithValue("@published", published);
-        using (var reader = command.ExecuteReader())
-        {
-            while (reader.Read())
-            {
-                var id = reader.GetInt32(0);
-                var name = reader.GetString(1);
-                yield return new Quiz() { Id = id, Name = name };
-            }
-        }
-    }
-        
-    public IEnumerable<Quiz> GetAllPublishedQuizzes(SqliteTransaction? transaction = null)
-    {
-        SqliteCommand command = new("""SELECT id, name FROM quizzes WHERE is_published IS TRUE""", connection, transaction);
         using var reader = command.ExecuteReader();
         while (reader.Read())
         {
             var id = reader.GetInt32(0);
-            var name = reader.GetString(1);
-            yield return new Quiz() { Id = id, Name = name };
+            var question = reader.GetString(1);
+            var answer = reader.GetString(2);
+
+            yield return new() { Id = id, Question = question, Answer = answer };
+        }
+    }
+
+    public IEnumerable<Quiz> GetQuizzes(bool published, int? userId = null, SqliteTransaction? transaction = null)
+    {
+        SqliteCommand command = new("""
+            SELECT id, name FROM quizzes
+            WHERE is_published IS @published
+            AND (@user_id IS NULL OR user_id = @user_id)
+            """, connection, transaction);
+        command.Parameters.AddWithValue("@published", published);
+        command.Parameters.AddWithValue("@user_id", userId.HasValue ? userId.Value : DBNull.Value);
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            yield return new Quiz { Id = reader.GetInt32(0), Name = reader.GetString(1) };
         }
     }
 

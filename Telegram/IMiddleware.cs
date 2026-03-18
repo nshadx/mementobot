@@ -1,8 +1,8 @@
 ﻿namespace mementobot.Telegram;
 
-public delegate Task UpdateDelegate(Context context);
+internal delegate Task UpdateDelegate(Context context);
 
-public interface IMiddleware
+internal interface IMiddleware
 {
     Task Handle(Context context, UpdateDelegate next);
 }

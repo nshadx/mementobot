@@ -1,30 +1,52 @@
-﻿using Microsoft.Extensions.Options;
+using mementobot.Services;
+using mementobot.Telegram.StateMachine;
+using Microsoft.Extensions.Options;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 
 namespace mementobot.Telegram;
 
-public static class TelegramDependencyInjectionExtensions
+internal static class TelegramDependencyInjectionExtensions
 {
-    extension(IHostApplicationBuilder builder)
+    extension(IServiceCollection services)
     {
-        public IHostApplicationBuilder AddTelegram()
+        public IServiceCollection AddTelegram(Action<TelegramConfiguration> configure)
         {
-            builder.Services.Configure<TelegramConfiguration>(builder.Configuration.GetRequiredSection(nameof(TelegramConfiguration)));
-            builder.Services.AddHttpClient("TelegramBotClient")
+            services.AddHttpClient("TelegramBotClient")
                 .RemoveAllLoggers()
-                .AddTypedClient<ITelegramBotClient>((httpClient, provider) =>
+                .AddTypedClient<ITelegramBotClient>((httpClient, _) =>
                 {
-                    var configuration = provider.GetRequiredService<IOptions<TelegramConfiguration>>().Value;
-                    return new TelegramBotClient(configuration.Token, httpClient);
+                    TelegramConfiguration instance = new();
+                    configure(instance);
+
+                    return new TelegramBotClient(instance.Token, httpClient);
                 });
-            builder.Services.AddHostedService<PollingService>();
-            builder.Services.AddScoped<IUpdateHandler, UpdateHandler>();
-            builder.Services.AddMemoryCache();
-            builder.Services.AddSingleton<TelegramFileService>();
-            builder.Services.AddSingleton<MessageManager>();
-        
-            return builder;
+            services.AddHostedService<PollingService>();
+            services.AddScoped<IUpdateHandler, UpdateHandler>();
+            services.AddScoped<BehaviorContextFactory>();
+            services.AddScoped<ISessionStore, MemorySessionStore>();
+            services.AddMemoryCache();
+            services.AddSingleton<TelegramFileService>();
+            services.AddSingleton<MessageManager>();
+
+            return services;
+        }
+
+        public IServiceCollection AddStateMachine<TStateMachine, TInstance>()
+            where TStateMachine : StateMachine<TInstance>
+            where TInstance : class
+        {
+            services.AddSingleton<TStateMachine>();
+            services.AddSingleton<IStateMachine>(sp => sp.GetRequiredService<TStateMachine>());
+            return services;
+        }
+
+        public IServiceCollection ConfigurePipeline(Action<PipelineBuilder> action)
+        {
+            var builder = new PipelineBuilder(services);
+            action(builder);
+            builder.Build();
+            return services;
         }
     }
 }

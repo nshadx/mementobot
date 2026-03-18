@@ -1,11 +1,10 @@
-﻿using mementobot.Services;
-using Scriban;
+﻿using Scriban;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 
-namespace mementobot.Telegram;
+namespace mementobot.Services;
 
 internal class MessageManager(
     ITelegramBotClient client
@@ -73,7 +72,7 @@ internal class MessageManager(
                 ])
         );
 
-        if (editMessageId is int i)
+        if (editMessageId is { } i)
         {
             message = await client.EditMessageReplyMarkup(
                 chatId: chatId,

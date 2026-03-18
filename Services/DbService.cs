@@ -3,7 +3,7 @@ using Microsoft.Data.Sqlite;
 
 namespace mementobot.Services;
 
-public class DbService(
+internal class DbService(
     SqliteConnection connection,
     IServiceProvider provider
 )
@@ -11,9 +11,8 @@ public class DbService(
     public void Migrate()
     {
         using (var scope = provider.CreateScope())
-        {
-            var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>(); 
-            runner.MigrateUp();
+        { 
+            scope.ServiceProvider.GetRequiredService<IMigrationRunner>().MigrateUp();
         }
         
         connection.Open();

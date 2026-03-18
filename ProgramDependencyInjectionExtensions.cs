@@ -1,42 +1,45 @@
-﻿using mementobot.Handlers;
+using mementobot.Handlers;
 using mementobot.StateMachines;
 using mementobot.Telegram;
+using mementobot.Telegram.StateMachine;
 
 namespace mementobot;
 
 internal static class ProgramDependencyInjectionExtensions
 {
-    extension(IHostApplicationBuilder builder)
+    extension(IServiceCollection services)
     {
-        public IHostApplicationBuilder RouteCommands()
+        public IServiceCollection RouteCommands()
         {
-            builder.Services.AddRouting(builder =>
+            services.AddRouting(builder =>
             {
                 builder.Command<CreateNewQuizCommandHandler>("/new");
             });
-        
-            return builder;
+
+            return services;
         }
 
-        public IHostApplicationBuilder RouteStateMachines()
+        public IServiceCollection RouteStateMachines()
         {
-            builder.Services.AddSingleton<QuizPickingStateMachine>();
-            
-            builder.AddStateMachine<AddQuizQuestionStateMachine, AddQuizQuestionState>();
-            builder.AddStateMachine<PublishQuizStateMachine, PublishQuizState>();
-            builder.AddStateMachine<QuizProgressStateMachine, QuizProgressState>();
+            services.AddStateMachine<QuizPickingStateMachine, QuizPickingState>();
+            services.AddStateMachine<AddQuizQuestionStateMachine, AddQuizQuestionState>();
+            services.AddStateMachine<PublishQuizStateMachine, PublishQuizState>();
+            services.AddStateMachine<QuizProgressStateMachine, QuizProgressState>();
 
-            return builder;
+            return services;
         }
-        
-        public IHostApplicationBuilder ConfigureAppPipeline()
+
+        public IServiceCollection ConfigureAppPipeline()
         {
-            builder.ConfigurePipeline(x =>
+            services.ConfigurePipeline(x =>
             {
+                x.Use<AnswerCallbackQueryMiddleware>();
+                x.Use<DeleteCommandMiddleware>();
+                x.Use<StateMachineMiddleware>();
                 x.Use<RouterMiddleware>();
             });
 
-            return builder;
+            return services;
         }
     }
 }

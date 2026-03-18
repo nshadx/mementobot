@@ -13,13 +13,15 @@ internal class CreateNewQuizCommandHandler(
 {
     public async Task Handle(Context context)
     {
-        if (context.Update.Message is not { Text: string text, Id: int messageId })
+        if (context.Update.Message is not { Text: { } text, Id: var messageId })
         {
             return;
         }
         
+        var chatId = context.Update.GetChatId();
+        
         await client.DeleteMessage(
-            chatId: context.Update.GetChatId(),
+            chatId: chatId,
             messageId: messageId
         );
 
@@ -28,7 +30,6 @@ internal class CreateNewQuizCommandHandler(
             return;
         }
 
-        var chatId = context.Update.GetChatId();
         var userId = userService.GetOrCreateUser(chatId);
         quizService.CreateNew(
             userId: userId,
@@ -36,7 +37,7 @@ internal class CreateNewQuizCommandHandler(
         );
 
         await messageManager.CreateNewQuizMessage(
-            chatId: context.Update.GetChatId()
+            chatId: chatId
         );
     }
 }

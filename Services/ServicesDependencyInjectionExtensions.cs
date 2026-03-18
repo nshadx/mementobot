@@ -1,4 +1,4 @@
-﻿using FluentMigrator.Runner;
+using FluentMigrator.Runner;
 using mementobot.Migrations;
 using Microsoft.Data.Sqlite;
 
@@ -6,30 +6,28 @@ namespace mementobot.Services;
 
 internal static class ServicesDependencyInjectionExtensions
 {
-    extension(IHostApplicationBuilder builder)
+    extension(IServiceCollection services)
     {
-        public IHostApplicationBuilder AddServices()
+        public IServiceCollection AddServices()
         {
-            builder.Services.AddSingleton<QuizService>();
-            builder.Services.AddSingleton<UserService>();
+            services.AddSingleton<QuizService>();
+            services.AddSingleton<UserService>();
 
-            return builder;
+            return services;
         }
 
-        public IHostApplicationBuilder AddDb()
+        public IServiceCollection AddDb(string connectionString)
         {
-            var connectionString = builder.Configuration.GetConnectionString("Db");
-            
-            builder.Services.AddSingleton<DbService>();
-            builder.Services.AddFluentMigratorCore().ConfigureRunner(x =>
+            services.AddSingleton<DbService>();
+            services.AddFluentMigratorCore().ConfigureRunner(x =>
             {
                 x.AddSQLite();
                 x.WithGlobalConnectionString(connectionString);
                 x.ScanIn(typeof(InitialMigration).Assembly);
             });
-            builder.Services.AddSingleton(_ => new SqliteConnection(connectionString));
-            
-            return builder;
+            services.AddSingleton(_ => new SqliteConnection(connectionString));
+
+            return services;
         }
     }
 }

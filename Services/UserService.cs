@@ -2,7 +2,7 @@
 
 namespace mementobot.Services;
 
-public class UserService(
+internal class UserService(
     SqliteConnection connection
 )
 {

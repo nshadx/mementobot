@@ -1,9 +1,10 @@
 ﻿using mementobot.Services;
 using mementobot.Telegram;
+using mementobot.Telegram.StateMachine;
 
 namespace mementobot.StateMachines;
 
-public class AddQuizQuestionState
+internal class AddQuizQuestionState
 {
     public QuizPickingState QuizPickingState { get; set; } = null!;
 
@@ -14,7 +15,7 @@ public class AddQuizQuestionState
     public int CurrentState { get; set; }
 }
 
-public class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
+internal class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
 {
     public Event AddCommandReceivedEvent { get; private set; } = null!;
     public Event MessageReceivedEvent { get; private set; } = null!;
@@ -90,25 +91,23 @@ public class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
                 .TransitionTo(Final)
         );
 
-        Finally(x => x.Then(AddQuizQuestion));
+        Finally(x => x.Then(context =>
+        {
+            var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
+
+            var quizId = context.Instance.QuizPickingState.QuizId;
+            var question = context.Instance.Question;
+            var answer = context.Instance.Answer;
+
+            quizService.AddQuizQuestion(
+                quizId: quizId,
+                question: question,
+                answer: answer
+            );
+
+            return Task.CompletedTask;
+        }));
 
         SetCompletedOnFinal();
-    }
-
-    private static Task AddQuizQuestion(BehaviorContext<AddQuizQuestionState> context)
-    {
-        var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
-
-        var quizId = context.Instance.QuizPickingState.QuizId;
-        var question = context.Instance.Question;
-        var answer = context.Instance.Answer;
-
-        quizService.AddQuizQuestion(
-            quizId: quizId,
-            question: question,
-            answer: answer
-        );
-
-        return Task.CompletedTask;
     }
 }

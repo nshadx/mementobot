@@ -1,21 +1,20 @@
-﻿using mementobot;
+using mementobot;
 using mementobot.Services;
 using mementobot.Telegram;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.AddTelegram();
-builder.AddServices();
-builder.AddDb();
+builder.Services.AddTelegram(builder.Configuration.GetSection(nameof(TelegramConfiguration)).Bind);
+builder.Services.AddServices();
+builder.Services.AddDb(builder.Configuration.GetConnectionString("Db")!);
 
-builder.RouteCommands();
-builder.RouteStateMachines();
-builder.ConfigureAppPipeline();
+builder.Services.RouteCommands();
+builder.Services.RouteStateMachines();
+builder.Services.ConfigureAppPipeline();
 
-using (var app = builder.Build())
-{
-    var dbService = app.Services.GetRequiredService<DbService>();
-    dbService.Migrate();
-    
-    app.Run();
-}
+using var app = builder.Build();
+
+var dbService = app.Services.GetRequiredService<DbService>();
+dbService.Migrate();
+
+app.Run();

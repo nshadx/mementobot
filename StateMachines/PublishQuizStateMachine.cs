@@ -1,16 +1,17 @@
 ﻿using mementobot.Services;
 using mementobot.Telegram;
+using mementobot.Telegram.StateMachine;
 
 namespace mementobot.StateMachines;
 
-public class PublishQuizState
+internal class PublishQuizState
 {
     public QuizPickingState QuizPickingState { get; set; } = null!;
     
     public int CurrentState { get; set; }
 }
 
-public class PublishQuizStateMachine : StateMachine<PublishQuizState>
+internal class PublishQuizStateMachine : StateMachine<PublishQuizState>
 {
     public Event PublishCommandReceivedEvent { get; private set; } = null!;
     
