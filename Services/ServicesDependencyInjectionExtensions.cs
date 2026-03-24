@@ -1,5 +1,6 @@
 using FluentMigrator.Runner;
 using mementobot.Migrations;
+using mementobot.Services.Quizzing;
 using Microsoft.Data.Sqlite;
 
 namespace mementobot.Services;
@@ -12,6 +13,12 @@ internal static class ServicesDependencyInjectionExtensions
         {
             services.AddSingleton<QuizService>();
             services.AddSingleton<UserService>();
+
+            services.AddSingleton<IAnswerEvaluator, FuzzyAnswerEvaluator>();
+            services.AddSingleton<IRequeuingStrategy, DefaultRequeuingStrategy>();
+            services.AddSingleton<QuestionEngineService>();
+            services.AddSingleton<IQuestionEngine>(sp => sp.GetRequiredService<QuestionEngineService>());
+            services.AddSingleton<IQuizSessionStatistics>(sp => sp.GetRequiredService<QuestionEngineService>());
 
             return services;
         }

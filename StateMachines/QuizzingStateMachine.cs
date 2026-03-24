@@ -1,34 +1,34 @@
-﻿using System.Text.RegularExpressions;
-using FuzzySharp;
 using mementobot.Services;
+using mementobot.Services.Quizzing;
 using mementobot.Telegram;
 using mementobot.Telegram.StateMachine;
 
 namespace mementobot.StateMachines;
 
-internal record UserQuizQuestion(QuizQuestion QuizQuestion, int Order);
-
-internal class QuizProgressState
+internal class QuizzingState
 {
     public QuizPickingState QuizPickingState { get; set; } = null!;
 
-    public List<UserQuizQuestion> UserQuizQuestions { get; set; } = [];
-    public UserQuizQuestion? CurrentQuestion { get; set; }
-    public int CurrentOrder { get; set; } = -1;
+    public QuestionQueue Queue { get; set; } = new();
+    public Dictionary<int, QuizQuestion> Questions { get; set; } = [];
     public int MessageId { get; set; }
 
     public int CurrentState { get; set; }
 }
 
-internal partial class QuizProgressStateMachine : StateMachine<QuizProgressState>
+internal class QuizzingStateMachine : StateMachine<QuizzingState>
 {
     public Event OnSkipCallbackEvent { get; private set; } = null!;
     public Event StartCommandReceivedEvent { get; private set; } = null!;
     public Event MessageReceivedEvent { get; private set; } = null!;
 
-    public State<QuizProgressState> QuizQuestion { get; private set; } = null!;
+    public State<QuizzingState> QuizQuestion { get; private set; } = null!;
 
-    public QuizProgressStateMachine(QuizPickingStateMachine quizPickingStateMachine)
+    public QuizzingStateMachine(
+        QuizPickingStateMachine quizPickingStateMachine,
+        IQuestionEngine engine,
+        IAnswerEvaluator evaluator,
+        IQuizSessionStatistics statistics)
     {
         ConfigureEvent(() => OnSkipCallbackEvent, update => update.CallbackQuery?.Data is "skip");
         ConfigureEvent(() => StartCommandReceivedEvent, update => update.Message?.Text?.StartsWith("/start") ?? false);
@@ -58,10 +58,13 @@ internal partial class QuizProgressStateMachine : StateMachine<QuizProgressState
                 var quizQuestions = quizService.GetQuizQuestions(
                     quizId: context.Instance.QuizPickingState.QuizId
                 );
-                var userQuizQuestions = quizQuestions
-                    .Select((x, i) => new UserQuizQuestion(x, i))
-                    .ToList();
-                context.Instance.UserQuizQuestions = userQuizQuestions;
+
+                foreach (var q in quizQuestions)
+                {
+                    context.Instance.Questions[q.Id] = q;
+                    context.Instance.Queue.QuestionIds.Add(q.Id);
+                }
+
                 return Task.CompletedTask;
             })
             .TransitionTo(QuizQuestion);
@@ -71,24 +74,19 @@ internal partial class QuizProgressStateMachine : StateMachine<QuizProgressState
                 .Then(async context =>
                 {
                     var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-
                     var chatId = context.Update.GetChatId();
-                    var nextQuestion = context.Instance.UserQuizQuestions
-                        .Where(x => x.Order > context.Instance.CurrentOrder)
-                        .OrderBy(x => x.Order)
-                        .FirstOrDefault();
 
-                    if (nextQuestion is null)
+                    var questionId = engine.GetCurrentQuestionId(context.Instance.Queue);
+                    if (questionId is null)
                     {
                         await context.TransitionTo(Final);
                         return;
                     }
 
-                    context.Instance.CurrentQuestion = nextQuestion;
-
+                    var question = context.Instance.Questions[questionId.Value];
                     var messageId = await messageManager.SendQuestionMessage(
                         chatId: chatId,
-                        question: nextQuestion.QuizQuestion
+                        question: question
                     );
                     context.Instance.MessageId = messageId;
                 }),
@@ -96,50 +94,36 @@ internal partial class QuizProgressStateMachine : StateMachine<QuizProgressState
                 .Then(async context =>
                 {
                     var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+                    var chatId = context.Update.GetChatId();
 
-                    var currentAnswer = context.Update.Message?.Text ?? context.Update.Message?.Caption;
-                    var correctAnswer = context.Instance.CurrentQuestion!.QuizQuestion.Answer;
-                    if (currentAnswer is null)
-                    {
+                    var currentText = context.Update.Message?.Text ?? context.Update.Message?.Caption;
+                    if (currentText is null)
                         return;
-                    }
 
-                    var score = Fuzz.TokenSetRatio(Normalize(correctAnswer), Normalize(currentAnswer));
-                    var penalty = score switch
-                    {
-                        100 => 0,
-                        >= 80 => 0,
-                        >= 50 => 5,
-                        _ => 3
-                    };
+                    var questionId = engine.GetCurrentQuestionId(context.Instance.Queue)!.Value;
+                    var question = context.Instance.Questions[questionId];
 
-                    context.Instance.CurrentOrder = context.Instance.CurrentQuestion!.Order;
+                    var result = evaluator.Evaluate(question, new TextAnswerResult(currentText));
+                    var nextId = engine.Advance(context.Instance.Queue, result);
 
-                    if (penalty > 0)
-                    {
-                        var newOrder = context.Instance.CurrentOrder + penalty;
-                        if (newOrder < context.Instance.UserQuizQuestions.Count)
-                        {
-                            var updated = context.Instance.CurrentQuestion with { Order = newOrder };
-                            var idx = context.Instance.UserQuizQuestions.FindIndex(
-                                x => x.QuizQuestion == context.Instance.CurrentQuestion.QuizQuestion);
-                            context.Instance.UserQuizQuestions[idx] = updated;
-                        }
-                    }
+                    var score = (int)(result.Score * 100);
+                    var shift = nextId is not null
+                        ? context.Instance.Queue.QuestionIds.IndexOf(questionId)
+                        : 0;
+                    var repeatsAfter = shift > 0 ? shift : 0;
 
-                    var messageId = await messageManager.SendCompletedAnswering(
-                        chatId: context.Update.GetChatId(),
-                        question: context.Instance.CurrentQuestion.QuizQuestion,
-                        repeatsAfter: penalty,
+                    await messageManager.SendCompletedAnswering(
+                        chatId: chatId,
+                        question: question,
+                        repeatsAfter: repeatsAfter,
                         score: score
                     );
-                    context.Instance.MessageId = messageId;
                 })
                 .TransitionTo(QuizQuestion),
             When(OnSkipCallbackEvent)
                 .Then(context =>
                 {
-                    context.Instance.CurrentOrder = context.Instance.CurrentQuestion!.Order;
+                    engine.Skip(context.Instance.Queue);
                     return Task.CompletedTask;
                 })
                 .TransitionTo(QuizQuestion)
@@ -150,16 +134,13 @@ internal partial class QuizProgressStateMachine : StateMachine<QuizProgressState
             var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
 
             _ = await messageManager.SendCompletedQuiz(
-                chatId: context.Update.GetChatId()
+                chatId: context.Update.GetChatId(),
+                statistics: statistics,
+                queue: context.Instance.Queue,
+                questions: context.Instance.Questions
             );
         }));
 
         SetCompletedOnFinal();
     }
-
-    private static string Normalize(string s) =>
-        WsRegex().Replace(s.ToLowerInvariant(), " ").Trim();
-
-    [GeneratedRegex(@"[^\w\s]")]
-    private static partial Regex WsRegex();
 }

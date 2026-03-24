@@ -24,7 +24,7 @@ internal static class ProgramDependencyInjectionExtensions
             services.AddStateMachine<QuizPickingStateMachine, QuizPickingState>();
             services.AddStateMachine<AddQuizQuestionStateMachine, AddQuizQuestionState>();
             services.AddStateMachine<PublishQuizStateMachine, PublishQuizState>();
-            services.AddStateMachine<QuizProgressStateMachine, QuizProgressState>();
+            services.AddStateMachine<QuizzingStateMachine, QuizzingState>();
 
             return services;
         }
