@@ -93,11 +93,95 @@ internal class MessageManager(
         return message.Id;
     }
 
-    public async Task<int> SendQuizPublishedMessage(long chatId)
+    public async Task<int> SendQuestionAddedMessage(long chatId)
     {
         var message = await client.SendMessage(
             chatId: chatId,
-            text: "🚀 Опросник опубликован!"
+            text: "✅ Вопрос добавлен!"
+        );
+        return message.Id;
+    }
+
+    public async Task<int> SendHelpMessage(long chatId)
+    {
+        var message = await client.SendMessage(
+            chatId: chatId,
+            text: """
+                  *Доступные команды:*
+
+                  /start — выбрать опросник и начать прохождение
+                  /new \<название\> — создать новый опросник
+                  /add — добавить вопрос в опросник
+                  /publish — опубликовать опросник
+                  /help — показать это сообщение
+                  """,
+            parseMode: ParseMode.MarkdownV2
+        );
+        return message.Id;
+    }
+
+    public async Task<int> SendQuizActionMenu(long chatId, bool isFavorited)
+    {
+        var message = await client.SendMessage(
+            chatId: chatId,
+            text: "Выбери действие:",
+            replyMarkup: BuildQuizActionKeyboard(isFavorited)
+        );
+        return message.Id;
+    }
+
+    public async Task EditQuizActionMenu(long chatId, int messageId, bool isFavorited)
+    {
+        await client.EditMessageReplyMarkup(
+            chatId: chatId,
+            messageId: messageId,
+            replyMarkup: BuildQuizActionKeyboard(isFavorited)
+        );
+    }
+
+    private static InlineKeyboardMarkup BuildQuizActionKeyboard(bool isFavorited)
+    {
+        var favoriteButton = isFavorited
+            ? new InlineKeyboardButton("❌ Убрать из избранного", "action:favorite")
+            : new InlineKeyboardButton("⭐ В избранное", "action:favorite");
+
+        return new InlineKeyboardMarkup([
+            [new InlineKeyboardButton("▶️ Пройти", "action:play")],
+            [favoriteButton]
+        ]);
+    }
+
+    public async Task<int> SendSearchPrompt(long chatId)
+    {
+        var message = await client.SendMessage(
+            chatId: chatId,
+            text: "🔍 Введи название опросника:"
+        );
+        return message.Id;
+    }
+
+    public async Task<int> SendStartMenu(long chatId)
+    {
+        var keyboard = new InlineKeyboardMarkup([
+            [new InlineKeyboardButton("⭐ Избранное", "start:favorites")],
+            [new InlineKeyboardButton("🕐 Недавно пройденные", "start:recent")],
+            [new InlineKeyboardButton("🔍 Поиск", "start:search")]
+        ]);
+        var message = await client.SendMessage(
+            chatId: chatId,
+            text: "Выбери опросник:",
+            replyMarkup: keyboard
+        );
+        return message.Id;
+    }
+
+    public async Task<int> SendQuizPublishedMessage(long chatId, int quizId)
+    {
+        var link = $"https://t.me/nshadx_mementobot?start={quizId}";
+        var message = await client.SendMessage(
+            chatId: chatId,
+            text: $"🚀 *Опросник опубликован\\!*\n\n📎 [Ссылка для прохождения]({link})",
+            parseMode: ParseMode.MarkdownV2
         );
         return message.Id;
     }

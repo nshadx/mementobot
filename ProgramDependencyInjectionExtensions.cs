@@ -14,6 +14,7 @@ internal static class ProgramDependencyInjectionExtensions
             services.AddRouting(builder =>
             {
                 builder.Command<CreateNewQuizCommandHandler>("/new");
+                builder.Command<HelpCommandHandler>("/help");
             });
 
             return services;
@@ -25,6 +26,11 @@ internal static class ProgramDependencyInjectionExtensions
             services.AddStateMachine<AddQuizQuestionStateMachine, AddQuizQuestionState>();
             services.AddStateMachine<PublishQuizStateMachine, PublishQuizState>();
             services.AddStateMachine<QuizzingStateMachine, QuizzingState>();
+            services.AddStateMachine<FavoritesPickingStateMachine, FavoritesPickingState>();
+            services.AddStateMachine<RecentPickingStateMachine, RecentPickingState>();
+            services.AddStateMachine<SearchPickingStateMachine, SearchPickingState>();
+            services.AddStateMachine<QuizActionMenuStateMachine, QuizActionMenuState>();
+            services.AddStateMachine<StartMenuStateMachine, StartMenuState>();
 
             return services;
         }

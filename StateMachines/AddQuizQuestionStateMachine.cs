@@ -1,4 +1,4 @@
-﻿using mementobot.Services;
+using mementobot.Services;
 using mementobot.Telegram;
 using mementobot.Telegram.StateMachine;
 
@@ -37,6 +37,7 @@ internal class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
                 .Then(context =>
                 {
                     context.Instance.QuizPickingState.Published = false;
+                    context.Instance.QuizPickingState.OnlyCurrentUser = true;
                     return Task.CompletedTask;
                 })
                 .TransitionTo(quizPickingStateMachine, quizPickingStateMachine.Initial),
@@ -91,9 +92,10 @@ internal class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
                 .TransitionTo(Final)
         );
 
-        Finally(x => x.Then(context =>
+        Finally(x => x.Then(async context =>
         {
             var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
+            var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
 
             var quizId = context.Instance.QuizPickingState.QuizId;
             var question = context.Instance.Question;
@@ -105,7 +107,9 @@ internal class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
                 answer: answer
             );
 
-            return Task.CompletedTask;
+            await messageManager.SendQuestionAddedMessage(
+                chatId: context.Update.GetChatId()
+            );
         }));
 
         SetCompletedOnFinal();

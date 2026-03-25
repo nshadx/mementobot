@@ -1,6 +1,7 @@
 using mementobot;
 using mementobot.Services;
 using mementobot.Telegram;
+using Telegram.Bot;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -16,5 +17,14 @@ using var app = builder.Build();
 
 var dbService = app.Services.GetRequiredService<DbService>();
 dbService.Migrate();
+
+var botClient = app.Services.GetRequiredService<ITelegramBotClient>();
+await botClient.SetMyDescription(
+    """
+    Привет! Я помогаю тренировать память с помощью метода интервальных повторений — создавай собственные опросники или проходи чужие.
+
+    Вызови /help, если что-то непонятно.
+    """
+);
 
 app.Run();

@@ -12,7 +12,7 @@ public class InitialMigration : Migration
             .WithColumn("telegram_id").AsInt64().NotNullable().Unique();
         Create.Table("quizzes")
             .WithColumn("id").AsInt32().Identity().PrimaryKey()
-            .WithColumn("user_id").AsInt64().ForeignKey("users", "id").Nullable()
+            .WithColumn("user_id").AsInt64().ForeignKey("users", "id").NotNullable()
             .WithColumn("name").AsString().NotNullable()
             .WithColumn("is_published").AsBoolean().NotNullable();
         Create.Table("quiz_questions")

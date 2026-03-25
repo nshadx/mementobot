@@ -163,6 +163,12 @@ internal class SubEventActivityBinder<TInstance, TSubInstance>
     public SubEventActivityBinder<TInstance, TSubInstance> TransitionTo(State<TInstance> state)
         => Add(new TransitionStateMachineActivity<TInstance>(state, _parentMachine.StateAccessor));
 
+    public SubEventActivityBinder<TInstance, TSubInstance> TransitionTo<TTargetSubInstance>(
+        StateMachine<TTargetSubInstance> targetSubMachine,
+        State<TTargetSubInstance> targetState
+    ) where TTargetSubInstance : class
+        => Add(_parentMachine.CreateSubActivateActivity(targetSubMachine, targetState));
+
     public SubEventActivityBinder<TInstance, TSubInstance> Then(Func<BehaviorContext<TInstance>, Task> action)
         => Add(new ActionStateMachineActivity<TInstance>(action));
 

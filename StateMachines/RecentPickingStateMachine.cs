@@ -4,31 +4,25 @@ using mementobot.Telegram.StateMachine;
 
 namespace mementobot.StateMachines;
 
-internal readonly record struct QuizPage(Quiz Quiz, int Page);
-
-internal class QuizPickingState
+internal class RecentPickingState
 {
-    public bool Published { get; set; }
-    public bool OnlyCurrentUser { get; set; }
-
     public List<QuizPage> Quizzes { get; set; } = [];
     public int MessageId { get; set; }
     public int Page { get; set; }
-
     public int QuizId { get; set; }
 
     public int CurrentState { get; set; }
 }
 
-internal class QuizPickingStateMachine : StateMachine<QuizPickingState>
+internal class RecentPickingStateMachine : StateMachine<RecentPickingState>
 {
     public Event PageForwardEvent { get; private set; } = null!;
     public Event PageBackwardEvent { get; private set; } = null!;
     public Event QuizPickedEvent { get; private set; } = null!;
 
-    public State<QuizPickingState> QuizPicking { get; private set; } = null!;
+    public State<RecentPickingState> QuizPicking { get; private set; } = null!;
 
-    public QuizPickingStateMachine()
+    public RecentPickingStateMachine()
     {
         ConfigureEvent(() => PageForwardEvent, update => update.CallbackQuery?.Data is "forward");
         ConfigureEvent(() => PageBackwardEvent, update => update.CallbackQuery?.Data is "backward");
@@ -45,13 +39,8 @@ internal class QuizPickingStateMachine : StateMachine<QuizPickingState>
                     var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
 
                     var chatId = context.Update.GetChatId();
-                    var userId = userService.GetOrCreateUser(
-                        telegramId: chatId
-                    );
-                    var quizzes = quizService.GetQuizzes(
-                        published: context.Instance.Published,
-                        userId: context.Instance.OnlyCurrentUser ? userId : null
-                    );
+                    var userId = userService.GetOrCreateUser(telegramId: chatId);
+                    var quizzes = quizService.GetRecentQuizzes(userId: userId);
 
                     var list = context.Instance.Quizzes;
                     var counter = 1;
@@ -61,28 +50,20 @@ internal class QuizPickingStateMachine : StateMachine<QuizPickingState>
                     {
                         if (counter <= 6)
                         {
-                            QuizPage quizPage = new(quiz, page);
-                            list.Add(quizPage);
+                            list.Add(new QuizPage(quiz, page));
                             counter++;
                         }
                         else
                         {
                             page++;
-                            counter = 0;
+                            counter = 1;
                         }
                     }
 
-                    var firstPageQuizzes = list
-                        .Where(x => x.Page == 1)
-                        .Select(x => x.Quiz)
-                        .ToArray();
-
-                    var messageId = await messageManager.SelectPollMessage(
-                        chatId: chatId,
-                        quizzes: firstPageQuizzes
-                    );
+                    var firstPage = list.Where(x => x.Page == 1).Select(x => x.Quiz).ToArray();
+                    var messageId = await messageManager.SelectPollMessage(chatId: chatId, quizzes: firstPage);
                     context.Instance.MessageId = messageId;
-                    
+
                     if (list.Count == 0)
                     {
                         context.IsCompleted = true;
@@ -93,62 +74,41 @@ internal class QuizPickingStateMachine : StateMachine<QuizPickingState>
             Ignore(PageForwardEvent),
             Ignore(PageBackwardEvent)
         );
-        
+
         During(QuizPicking,
             When(PageForwardEvent)
                 .Then(async context =>
                 {
                     var page = context.Instance.Page;
                     if (++page > context.Instance.Quizzes.Max(x => x.Page))
-                    {
                         return;
-                    }
-
                     await RenderPage(context, page);
-                })
-        );
-        
-        During(QuizPicking,
+                }),
             When(PageBackwardEvent)
                 .Then(async context =>
                 {
                     var page = context.Instance.Page;
                     if (--page < context.Instance.Quizzes.Min(x => x.Page))
-                    {
                         return;
-                    }
-
                     await RenderPage(context, page);
-                })
-        );
-
-        During(QuizPicking,
+                }),
             When(QuizPickedEvent)
                 .Then(async context =>
                 {
-                    if (context.Update is not { CallbackQuery.Data: { } data })
-                    {
-                        throw new InvalidOperationException("No quiz id");
-                    }
-                    
                     var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-
-                    var chatId = context.Update.GetChatId();
-                    var quizId = int.Parse(data);
+                    var quizId = int.Parse(context.Update.CallbackQuery!.Data!);
                     context.Instance.QuizId = quizId;
-
-                    await messageManager.DeleteMessage(chatId, context.Instance.MessageId);
+                    await messageManager.DeleteMessage(context.Update.GetChatId(), context.Instance.MessageId);
                 })
                 .TransitionTo(Final)
         );
-        
+
         SetCompletedOnFinal();
     }
 
-    private static async Task RenderPage(BehaviorContext<QuizPickingState> context, int page)
+    private static async Task RenderPage(BehaviorContext<RecentPickingState> context, int page)
     {
         var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-        
         var pageQuizzes = context.Instance.Quizzes
             .Where(x => x.Page == page)
             .Select(x => x.Quiz)

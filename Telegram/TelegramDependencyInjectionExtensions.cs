@@ -12,15 +12,12 @@ internal static class TelegramDependencyInjectionExtensions
     {
         public IServiceCollection AddTelegram(Action<TelegramConfiguration> configure)
         {
+            TelegramConfiguration config = new();
+            configure(config);
+
             services.AddHttpClient("TelegramBotClient")
                 .RemoveAllLoggers()
-                .AddTypedClient<ITelegramBotClient>((httpClient, _) =>
-                {
-                    TelegramConfiguration instance = new();
-                    configure(instance);
-
-                    return new TelegramBotClient(instance.Token, httpClient);
-                });
+                .AddTypedClient<ITelegramBotClient>((httpClient, _) => new TelegramBotClient(config.Token, httpClient));
             services.AddHostedService<PollingService>();
             services.AddScoped<IUpdateHandler, UpdateHandler>();
             services.AddScoped<BehaviorContextFactory>();

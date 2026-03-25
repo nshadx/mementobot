@@ -7,7 +7,7 @@ namespace mementobot.StateMachines;
 
 internal class QuizzingState
 {
-    public QuizPickingState QuizPickingState { get; set; } = null!;
+    public int QuizId { get; set; }
 
     public QuestionQueue Queue { get; set; } = new();
     public Dictionary<int, QuizQuestion> Questions { get; set; } = [];
@@ -19,55 +19,37 @@ internal class QuizzingState
 internal class QuizzingStateMachine : StateMachine<QuizzingState>
 {
     public Event OnSkipCallbackEvent { get; private set; } = null!;
-    public Event StartCommandReceivedEvent { get; private set; } = null!;
     public Event MessageReceivedEvent { get; private set; } = null!;
 
     public State<QuizzingState> QuizQuestion { get; private set; } = null!;
 
     public QuizzingStateMachine(
-        QuizPickingStateMachine quizPickingStateMachine,
         IQuestionEngine engine,
         IAnswerEvaluator evaluator,
         IQuizSessionStatistics statistics)
     {
         ConfigureEvent(() => OnSkipCallbackEvent, update => update.CallbackQuery?.Data is "skip");
-        ConfigureEvent(() => StartCommandReceivedEvent, update => update.Message?.Text?.StartsWith("/start") ?? false);
         ConfigureEvent(() => MessageReceivedEvent, update => update.Message?.Text is not null);
 
         ConfigureStates(state => state.CurrentState, () => QuizQuestion);
 
-        ConfigureStateMachine(quizPickingStateMachine, x => x.QuizPickingState);
-
         Initially(
-            When(StartCommandReceivedEvent)
+            When(Initial.Enter)
                 .Then(context =>
                 {
-                    context.Instance.QuizPickingState.Published = true;
-                    context.Instance.QuizPickingState.OnlyCurrentUser = false;
+                    var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
+                    var quizQuestions = quizService.GetQuizQuestions(quizId: context.Instance.QuizId);
+                    foreach (var q in quizQuestions)
+                    {
+                        context.Instance.Questions[q.Id] = q;
+                        context.Instance.Queue.QuestionIds.Add(q.Id);
+                    }
                     return Task.CompletedTask;
                 })
-                .TransitionTo(quizPickingStateMachine, quizPickingStateMachine.Initial),
-            Ignore(MessageReceivedEvent)
+                .TransitionTo(QuizQuestion),
+            Ignore(MessageReceivedEvent),
+            Ignore(OnSkipCallbackEvent)
         );
-
-        When(quizPickingStateMachine, quizPickingStateMachine.QuizPickedEvent)
-            .Then(context =>
-            {
-                var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
-
-                var quizQuestions = quizService.GetQuizQuestions(
-                    quizId: context.Instance.QuizPickingState.QuizId
-                );
-
-                foreach (var q in quizQuestions)
-                {
-                    context.Instance.Questions[q.Id] = q;
-                    context.Instance.Queue.QuestionIds.Add(q.Id);
-                }
-
-                return Task.CompletedTask;
-            })
-            .TransitionTo(QuizQuestion);
 
         During(QuizQuestion,
             When(QuizQuestion.Enter)
@@ -132,9 +114,15 @@ internal class QuizzingStateMachine : StateMachine<QuizzingState>
         Finally(x => x.Then(async context =>
         {
             var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+            var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
+            var userService = context.ServiceProvider.GetRequiredService<UserService>();
+
+            var chatId = context.Update.GetChatId();
+            var userId = userService.GetOrCreateUser(telegramId: chatId);
+            quizService.RecordQuizHistory(userId: userId, quizId: context.Instance.QuizId);
 
             _ = await messageManager.SendCompletedQuiz(
-                chatId: context.Update.GetChatId(),
+                chatId: chatId,
                 statistics: statistics,
                 queue: context.Instance.Queue,
                 questions: context.Instance.Questions
