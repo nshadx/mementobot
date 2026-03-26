@@ -45,9 +45,8 @@ internal class MyQuizzesStateMachine : StateMachine<MyQuizzesState>
 
         Initially(
             When(MyQuizzesCommandEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<MyQuizzesState> context, MyQuizzesMenuMessage menu) =>
                 {
-                    var menu = context.ServiceProvider.GetRequiredService<MyQuizzesMenuMessage>();
                     await menu.Apply(context.Update.GetChatId());
                 })
                 .TransitionTo(Menu),
@@ -58,23 +57,20 @@ internal class MyQuizzesStateMachine : StateMachine<MyQuizzesState>
 
         During(Menu,
             When(MineSelectedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<MyQuizzesState> context, MyQuizzesMenuMessage menu) =>
                 {
-                    var menu = context.ServiceProvider.GetRequiredService<MyQuizzesMenuMessage>();
                     await menu.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(ownedPickingStateMachine, ownedPickingStateMachine.Initial),
             When(FavoritesSelectedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<MyQuizzesState> context, MyQuizzesMenuMessage menu) =>
                 {
-                    var menu = context.ServiceProvider.GetRequiredService<MyQuizzesMenuMessage>();
                     await menu.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(favoritesPickingStateMachine, favoritesPickingStateMachine.Initial),
             When(RecentSelectedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<MyQuizzesState> context, MyQuizzesMenuMessage menu) =>
                 {
-                    var menu = context.ServiceProvider.GetRequiredService<MyQuizzesMenuMessage>();
                     await menu.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(recentPickingStateMachine, recentPickingStateMachine.Initial)

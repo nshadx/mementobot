@@ -39,10 +39,8 @@ internal class SettingsMenuStateMachine : StateMachine<SettingsMenuState>
 
         Initially(
             When(SettingsCommandEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<SettingsMenuState> context, UserService userService, SettingsMenuMessage settingsMenu) =>
                 {
-                    var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                    var settingsMenu = context.ServiceProvider.GetRequiredService<SettingsMenuMessage>();
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(chatId);
                     await settingsMenu.Apply(chatId, userService.GetUserSettings(userId));
@@ -56,10 +54,8 @@ internal class SettingsMenuStateMachine : StateMachine<SettingsMenuState>
 
         During(WaitingAction,
             When(ToggleRemindersEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<SettingsMenuState> context, UserService userService, SettingsMenuMessage settingsMenu) =>
                 {
-                    var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                    var settingsMenu = context.ServiceProvider.GetRequiredService<SettingsMenuMessage>();
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(chatId);
                     var settings = userService.GetUserSettings(userId);
@@ -67,10 +63,8 @@ internal class SettingsMenuStateMachine : StateMachine<SettingsMenuState>
                     await settingsMenu.Apply(chatId, settings with { RemindersEnabled = !settings.RemindersEnabled });
                 }),
             When(ToggleAdultContentEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<SettingsMenuState> context, UserService userService, SettingsMenuMessage settingsMenu) =>
                 {
-                    var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                    var settingsMenu = context.ServiceProvider.GetRequiredService<SettingsMenuMessage>();
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(chatId);
                     var settings = userService.GetUserSettings(userId);
@@ -84,10 +78,8 @@ internal class SettingsMenuStateMachine : StateMachine<SettingsMenuState>
         );
 
         When(reminderTimeStateMachine, reminderTimeStateMachine.Final.Enter)
-            .Then(async context =>
+            .Then(async (BehaviorContext<SettingsMenuState> context, UserService userService, SettingsMenuMessage settingsMenu) =>
             {
-                var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                var settingsMenu = context.ServiceProvider.GetRequiredService<SettingsMenuMessage>();
                 var chatId = context.Update.GetChatId();
                 var userId = userService.GetOrCreateUser(chatId);
                 await settingsMenu.Apply(chatId, userService.GetUserSettings(userId));
@@ -95,10 +87,8 @@ internal class SettingsMenuStateMachine : StateMachine<SettingsMenuState>
             .TransitionTo(WaitingAction);
 
         When(temperatureStateMachine, temperatureStateMachine.Final.Enter)
-            .Then(async context =>
+            .Then(async (BehaviorContext<SettingsMenuState> context, UserService userService, SettingsMenuMessage settingsMenu) =>
             {
-                var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                var settingsMenu = context.ServiceProvider.GetRequiredService<SettingsMenuMessage>();
                 var chatId = context.Update.GetChatId();
                 var userId = userService.GetOrCreateUser(chatId);
                 await settingsMenu.Apply(chatId, userService.GetUserSettings(userId));

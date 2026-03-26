@@ -37,12 +37,8 @@ internal class QuizPickingStateMachine : StateMachine<QuizPickingState>
 
         Initially(
             When(Initial.Enter)
-                .Then(async context =>
+                .Then(async (BehaviorContext<QuizPickingState> context, QuizService quizService, UserService userService, QuizListMessage quizList) =>
                 {
-                    var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
-                    var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                    var quizList = context.ServiceProvider.GetRequiredService<QuizListMessage>();
-
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(telegramId: chatId);
                     var quizzes = quizService.GetQuizzes(
@@ -73,25 +69,23 @@ internal class QuizPickingStateMachine : StateMachine<QuizPickingState>
 
         During(QuizPicking,
             When(PageForwardEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<QuizPickingState> context, QuizListMessage quizList) =>
                 {
                     var page = context.Instance.Page;
                     if (++page > context.Instance.Quizzes.Max(x => x.Page)) return;
-                    await RenderPage(context, page);
+                    await RenderPage(context, page, quizList);
                 }),
             When(PageBackwardEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<QuizPickingState> context, QuizListMessage quizList) =>
                 {
                     var page = context.Instance.Page;
                     if (--page < context.Instance.Quizzes.Min(x => x.Page)) return;
-                    await RenderPage(context, page);
+                    await RenderPage(context, page, quizList);
                 }),
             When(QuizPickedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<QuizPickingState> context, QuizListMessage quizList) =>
                 {
-                    var quizList = context.ServiceProvider.GetRequiredService<QuizListMessage>();
-                    var quizId = int.Parse(context.Update.CallbackQuery!.Data!);
-                    context.Instance.QuizId = quizId;
+                    context.Instance.QuizId = int.Parse(context.Update.CallbackQuery!.Data!);
                     await quizList.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(Final)
@@ -100,9 +94,8 @@ internal class QuizPickingStateMachine : StateMachine<QuizPickingState>
         SetCompletedOnFinal();
     }
 
-    private static async Task RenderPage(BehaviorContext<QuizPickingState> context, int page)
+    private static async Task RenderPage(BehaviorContext<QuizPickingState> context, int page, QuizListMessage quizList)
     {
-        var quizList = context.ServiceProvider.GetRequiredService<QuizListMessage>();
         var pageQuizzes = context.Instance.Quizzes
             .Where(x => x.Page == page).Select(x => x.Quiz).ToArray();
         await quizList.Apply(context.Update.GetChatId(), pageQuizzes);

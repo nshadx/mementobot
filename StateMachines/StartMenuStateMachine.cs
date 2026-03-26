@@ -1,4 +1,3 @@
-using mementobot.Services;
 using mementobot.Services.Messages;
 using mementobot.Telegram;
 using mementobot.Telegram.StateMachine;
@@ -62,9 +61,8 @@ internal class StartMenuStateMachine : StateMachine<StartMenuState>
                 })
                 .TransitionTo(quizActionMenuStateMachine, quizActionMenuStateMachine.Initial),
             When(MenuStartEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<StartMenuState> context, StartMenuMessage startMenu) =>
                 {
-                    var startMenu = context.ServiceProvider.GetRequiredService<StartMenuMessage>();
                     await startMenu.Apply(context.Update.GetChatId());
                 })
                 .TransitionTo(Menu),
@@ -75,23 +73,20 @@ internal class StartMenuStateMachine : StateMachine<StartMenuState>
 
         During(Menu,
             When(FavoritesSelectedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<StartMenuState> context, StartMenuMessage startMenu) =>
                 {
-                    var startMenu = context.ServiceProvider.GetRequiredService<StartMenuMessage>();
                     await startMenu.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(favoritesPickingStateMachine, favoritesPickingStateMachine.Initial),
             When(RecentSelectedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<StartMenuState> context, StartMenuMessage startMenu) =>
                 {
-                    var startMenu = context.ServiceProvider.GetRequiredService<StartMenuMessage>();
                     await startMenu.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(recentPickingStateMachine, recentPickingStateMachine.Initial),
             When(SearchSelectedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<StartMenuState> context, StartMenuMessage startMenu) =>
                 {
-                    var startMenu = context.ServiceProvider.GetRequiredService<StartMenuMessage>();
                     await startMenu.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(searchPickingStateMachine, searchPickingStateMachine.Initial)

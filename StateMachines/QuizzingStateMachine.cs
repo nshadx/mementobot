@@ -35,15 +35,14 @@ internal class QuizzingStateMachine : StateMachine<QuizzingState>
 
         Initially(
             When(Initial.Enter)
-                .Then(context =>
+                .Then(async (BehaviorContext<QuizzingState> context, QuizService quizService) =>
                 {
-                    var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
                     foreach (var q in quizService.GetQuizQuestions(quizId: context.Instance.QuizId))
                     {
                         context.Instance.Questions[q.Id] = q;
                         context.Instance.Queue.QuestionIds.Add(q.Id);
                     }
-                    return Task.CompletedTask;
+                    await Task.CompletedTask;
                 })
                 .TransitionTo(QuizQuestion),
             Ignore(MessageReceivedEvent),
@@ -52,11 +51,8 @@ internal class QuizzingStateMachine : StateMachine<QuizzingState>
 
         During(QuizQuestion,
             When(QuizQuestion.Enter)
-                .Then(async context =>
+                .Then(async (BehaviorContext<QuizzingState> context, QuizQuestionMessage quizQuestionMsg) =>
                 {
-                    var quizQuestionMsg = context.ServiceProvider.GetRequiredService<QuizQuestionMessage>();
-                    var chatId = context.Update.GetChatId();
-
                     var questionId = engine.GetCurrentQuestionId(context.Instance.Queue);
                     if (questionId is null)
                     {
@@ -64,19 +60,15 @@ internal class QuizzingStateMachine : StateMachine<QuizzingState>
                         return;
                     }
 
-                    await quizQuestionMsg.Apply(chatId, context.Instance.Questions[questionId.Value]);
+                    await quizQuestionMsg.Apply(context.Update.GetChatId(), context.Instance.Questions[questionId.Value]);
                 }),
             When(MessageReceivedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<QuizzingState> context, QuizQuestionMessage quizQuestionMsg, CompletedAnsweringMessage completedAnswering, IContextAccessor accessor) =>
                 {
-                    var quizQuestionMsg = context.ServiceProvider.GetRequiredService<QuizQuestionMessage>();
-                    var completedAnswering = context.ServiceProvider.GetRequiredService<CompletedAnsweringMessage>();
-                    var chatId = context.Update.GetChatId();
-
                     var currentText = context.Update.Message?.Text ?? context.Update.Message?.Caption;
                     if (currentText is null) return;
 
-                    context.ServiceProvider.GetRequiredService<IContextAccessor>().Current.DeleteUserMessage = true;
+                    accessor.Current.DeleteUserMessage = true;
 
                     var questionId = engine.GetCurrentQuestionId(context.Instance.Queue)!.Value;
                     var question = context.Instance.Questions[questionId];
@@ -88,7 +80,7 @@ internal class QuizzingStateMachine : StateMachine<QuizzingState>
                         ? context.Instance.Queue.QuestionIds.IndexOf(questionId)
                         : 0;
 
-                    await completedAnswering.Apply(chatId, new(question, score, RepeatsAfter: shift > 0 ? shift : 0));
+                    await completedAnswering.Apply(context.Update.GetChatId(), new(question, score, RepeatsAfter: shift > 0 ? shift : 0));
                 })
                 .TransitionTo(QuizQuestion),
             When(OnSkipCallbackEvent)
@@ -100,13 +92,8 @@ internal class QuizzingStateMachine : StateMachine<QuizzingState>
                 .TransitionTo(QuizQuestion)
         );
 
-        Finally(x => x.Then(async context =>
+        Finally(x => x.Then(async (BehaviorContext<QuizzingState> context, QuizQuestionMessage quizQuestionMsg, CompletedQuizMessage completedQuiz, QuizService quizService, UserService userService) =>
         {
-            var quizQuestionMsg = context.ServiceProvider.GetRequiredService<QuizQuestionMessage>();
-            var completedQuiz = context.ServiceProvider.GetRequiredService<CompletedQuizMessage>();
-            var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
-            var userService = context.ServiceProvider.GetRequiredService<UserService>();
-
             var chatId = context.Update.GetChatId();
             await quizQuestionMsg.Delete(chatId);
 

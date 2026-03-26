@@ -23,9 +23,8 @@ internal class TemperatureStateMachine : StateMachine<TemperatureState>
 
         Initially(
             When(Initial.Enter)
-                .Then(async context =>
+                .Then(async (BehaviorContext<TemperatureState> context, TemperaturePromptMessage prompt) =>
                 {
-                    var prompt = context.ServiceProvider.GetRequiredService<TemperaturePromptMessage>();
                     await prompt.Apply(context.Update.GetChatId(), false);
                 })
                 .TransitionTo(WaitingInput),
@@ -34,13 +33,12 @@ internal class TemperatureStateMachine : StateMachine<TemperatureState>
 
         During(WaitingInput,
             When(MessageReceivedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<TemperatureState> context, TemperaturePromptMessage prompt, IContextAccessor accessor, UserService userService) =>
                 {
                     var text = context.Update.Message!.Text!.Trim();
                     var chatId = context.Update.GetChatId();
-                    var prompt = context.ServiceProvider.GetRequiredService<TemperaturePromptMessage>();
 
-                    context.ServiceProvider.GetRequiredService<IContextAccessor>().Current.DeleteUserMessage = true;
+                    accessor.Current.DeleteUserMessage = true;
 
                     if (!int.TryParse(text, out var temperature) || temperature < 0 || temperature > 100)
                     {
@@ -48,7 +46,6 @@ internal class TemperatureStateMachine : StateMachine<TemperatureState>
                         return;
                     }
 
-                    var userService = context.ServiceProvider.GetRequiredService<UserService>();
                     var userId = userService.GetOrCreateUser(chatId);
                     userService.UpdateTemperature(userId, temperature);
 

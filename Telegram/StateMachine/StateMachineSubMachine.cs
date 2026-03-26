@@ -172,6 +172,9 @@ internal class SubEventActivityBinder<TInstance, TSubInstance>
     public SubEventActivityBinder<TInstance, TSubInstance> Then(Func<BehaviorContext<TInstance>, Task> action)
         => Add(new ActionStateMachineActivity<TInstance>(action));
 
+    public SubEventActivityBinder<TInstance, TSubInstance> Then(Delegate action)
+        => Then(ResolvingInvoker<TInstance>.Build(action));
+
     private SubEventActivityBinder<TInstance, TSubInstance> Add(IStateMachineActivity<TInstance> activity)
     {
         _descriptor.AddEpilogue(_subEvent, activity);

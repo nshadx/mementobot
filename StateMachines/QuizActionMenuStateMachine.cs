@@ -29,12 +29,8 @@ internal class QuizActionMenuStateMachine : StateMachine<QuizActionMenuState>
 
         Initially(
             When(Initial.Enter)
-                .Then(async context =>
+                .Then(async (BehaviorContext<QuizActionMenuState> context, QuizService quizService, UserService userService, QuizActionMenuMessage quizActionMenu) =>
                 {
-                    var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
-                    var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                    var quizActionMenu = context.ServiceProvider.GetRequiredService<QuizActionMenuMessage>();
-
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(telegramId: chatId);
                     var isOwned = quizService.IsOwnedBy(userId: userId, quizId: context.Instance.QuizId);
@@ -54,19 +50,14 @@ internal class QuizActionMenuStateMachine : StateMachine<QuizActionMenuState>
 
         During(WaitingAction,
             When(PlaySelectedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<QuizActionMenuState> context, QuizActionMenuMessage quizActionMenu) =>
                 {
-                    var quizActionMenu = context.ServiceProvider.GetRequiredService<QuizActionMenuMessage>();
                     await quizActionMenu.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(Final),
             When(ToggleFavoriteEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<QuizActionMenuState> context, QuizService quizService, UserService userService, QuizActionMenuMessage quizActionMenu) =>
                 {
-                    var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
-                    var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                    var quizActionMenu = context.ServiceProvider.GetRequiredService<QuizActionMenuMessage>();
-
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(telegramId: chatId);
 

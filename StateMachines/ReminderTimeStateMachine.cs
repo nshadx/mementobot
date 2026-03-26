@@ -23,9 +23,8 @@ internal class ReminderTimeStateMachine : StateMachine<ReminderTimeState>
 
         Initially(
             When(Initial.Enter)
-                .Then(async context =>
+                .Then(async (BehaviorContext<ReminderTimeState> context, ReminderHourPromptMessage prompt) =>
                 {
-                    var prompt = context.ServiceProvider.GetRequiredService<ReminderHourPromptMessage>();
                     await prompt.Apply(context.Update.GetChatId(), false);
                 })
                 .TransitionTo(WaitingInput),
@@ -34,13 +33,12 @@ internal class ReminderTimeStateMachine : StateMachine<ReminderTimeState>
 
         During(WaitingInput,
             When(MessageReceivedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<ReminderTimeState> context, ReminderHourPromptMessage prompt, IContextAccessor accessor, UserService userService) =>
                 {
                     var text = context.Update.Message!.Text!.Trim();
                     var chatId = context.Update.GetChatId();
-                    var prompt = context.ServiceProvider.GetRequiredService<ReminderHourPromptMessage>();
 
-                    context.ServiceProvider.GetRequiredService<IContextAccessor>().Current.DeleteUserMessage = true;
+                    accessor.Current.DeleteUserMessage = true;
 
                     if (!int.TryParse(text, out var hour) || hour < 0 || hour > 23)
                     {
@@ -48,7 +46,6 @@ internal class ReminderTimeStateMachine : StateMachine<ReminderTimeState>
                         return;
                     }
 
-                    var userService = context.ServiceProvider.GetRequiredService<UserService>();
                     var userId = userService.GetOrCreateUser(chatId);
                     userService.UpdateReminderHour(userId, hour);
 

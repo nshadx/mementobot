@@ -35,16 +35,11 @@ internal class PublishQuizStateMachine : StateMachine<PublishQuizState>
         );
 
         When(quizPickingStateMachine, quizPickingStateMachine.QuizPickedEvent)
-            .Then(async context =>
+            .Then(async (BehaviorContext<PublishQuizState> context, QuizService quizService, QuizPublishedMessage quizPublishedMessage) =>
             {
-                var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
-                var quizPublishedMessage = context.ServiceProvider.GetRequiredService<QuizPublishedMessage>();
-
-                var chatId = context.Update.GetChatId();
                 var quizId = context.Instance.QuizPickingState.QuizId;
                 quizService.PublishQuiz(quizId: quizId);
-
-                await quizPublishedMessage.Apply(chatId, quizId);
+                await quizPublishedMessage.Apply(context.Update.GetChatId(), quizId);
             });
 
         SetCompletedOnFinal();

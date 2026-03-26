@@ -45,48 +45,36 @@ internal class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
         );
 
         When(quizPickingStateMachine, quizPickingStateMachine.QuizPickedEvent)
-            .Then(async context =>
+            .Then(async (BehaviorContext<AddQuizQuestionState> context, AddQuizQuestionMessage prompt) =>
             {
-                var prompt = context.ServiceProvider.GetRequiredService<AddQuizQuestionMessage>();
                 await prompt.ApplyInputQuestion(context.Update.GetChatId());
             })
             .TransitionTo(FillingQuestion);
 
         During(FillingQuestion,
             When(MessageReceivedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<AddQuizQuestionState> context, AddQuizQuestionMessage prompt, IContextAccessor accessor) =>
                 {
                     context.Instance.Question = context.Update.Message!.Text!;
-
-                    var prompt = context.ServiceProvider.GetRequiredService<AddQuizQuestionMessage>();
-                    var chatId = context.Update.GetChatId();
-
-                    context.ServiceProvider.GetRequiredService<IContextAccessor>().Current.DeleteUserMessage = true;
-                    await prompt.ApplyInputAnswer(chatId);
+                    accessor.Current.DeleteUserMessage = true;
+                    await prompt.ApplyInputAnswer(context.Update.GetChatId());
                 })
                 .TransitionTo(FillingAnswer)
         );
 
         During(FillingAnswer,
             When(MessageReceivedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<AddQuizQuestionState> context, AddQuizQuestionMessage prompt, IContextAccessor accessor) =>
                 {
                     context.Instance.Answer = context.Update.Message!.Text!;
-
-                    var prompt = context.ServiceProvider.GetRequiredService<AddQuizQuestionMessage>();
-                    var chatId = context.Update.GetChatId();
-
-                    context.ServiceProvider.GetRequiredService<IContextAccessor>().Current.DeleteUserMessage = true;
-                    await prompt.Delete(chatId);
+                    accessor.Current.DeleteUserMessage = true;
+                    await prompt.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(Final)
         );
 
-        Finally(x => x.Then(async context =>
+        Finally(x => x.Then(async (BehaviorContext<AddQuizQuestionState> context, QuizService quizService, QuestionAddedMessage questionAddedMessage) =>
         {
-            var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
-            var questionAddedMessage = context.ServiceProvider.GetRequiredService<QuestionAddedMessage>();
-
             quizService.AddQuizQuestion(
                 quizId: context.Instance.QuizPickingState.QuizId,
                 question: context.Instance.Question,

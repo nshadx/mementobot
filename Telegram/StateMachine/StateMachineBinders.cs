@@ -72,6 +72,9 @@ internal static class EventActivityBinderExtensions
             return binder.Add(new ActionStateMachineActivity<TInstance>(action));
         }
 
+        public EventActivityBinder<TInstance> Then(Delegate action)
+            => binder.Then(ResolvingInvoker<TInstance>.Build(action));
+
         public EventActivityBinder<TInstance> TransitionTo(State<TInstance> state)
         {
             return binder.Add(new TransitionStateMachineActivity<TInstance>(state, binder.StateMachine.StateAccessor));

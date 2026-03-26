@@ -35,9 +35,8 @@ internal class SearchPickingStateMachine : StateMachine<SearchPickingState>
 
         Initially(
             When(Initial.Enter)
-                .Then(async context =>
+                .Then(async (BehaviorContext<SearchPickingState> context, SearchPromptMessage searchPrompt) =>
                 {
-                    var searchPrompt = context.ServiceProvider.GetRequiredService<SearchPromptMessage>();
                     await searchPrompt.Apply(context.Update.GetChatId());
                 })
                 .TransitionTo(EnteringQuery),
@@ -49,16 +48,13 @@ internal class SearchPickingStateMachine : StateMachine<SearchPickingState>
 
         During(EnteringQuery,
             When(MessageReceivedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<SearchPickingState> context, QuizService quizService, SearchPromptMessage searchPrompt, QuizListMessage quizList, IContextAccessor accessor) =>
                 {
                     var query = context.Update.Message!.Text!;
-                    var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
-                    var searchPrompt = context.ServiceProvider.GetRequiredService<SearchPromptMessage>();
-                    var quizList = context.ServiceProvider.GetRequiredService<QuizListMessage>();
                     var chatId = context.Update.GetChatId();
 
                     await searchPrompt.Delete(chatId);
-                    context.ServiceProvider.GetRequiredService<IContextAccessor>().Current.DeleteUserMessage = true;
+                    accessor.Current.DeleteUserMessage = true;
 
                     var quizzes = quizService.SearchPublishedQuizzes(query: query);
 
@@ -86,25 +82,23 @@ internal class SearchPickingStateMachine : StateMachine<SearchPickingState>
 
         During(ShowingResults,
             When(PageForwardEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<SearchPickingState> context, QuizListMessage quizList) =>
                 {
                     var page = context.Instance.Page;
                     if (++page > context.Instance.Quizzes.Max(x => x.Page)) return;
-                    await RenderPage(context, page);
+                    await RenderPage(context, page, quizList);
                 }),
             When(PageBackwardEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<SearchPickingState> context, QuizListMessage quizList) =>
                 {
                     var page = context.Instance.Page;
                     if (--page < context.Instance.Quizzes.Min(x => x.Page)) return;
-                    await RenderPage(context, page);
+                    await RenderPage(context, page, quizList);
                 }),
             When(QuizPickedEvent)
-                .Then(async context =>
+                .Then(async (BehaviorContext<SearchPickingState> context, QuizListMessage quizList) =>
                 {
-                    var quizList = context.ServiceProvider.GetRequiredService<QuizListMessage>();
-                    var quizId = int.Parse(context.Update.CallbackQuery!.Data!);
-                    context.Instance.QuizId = quizId;
+                    context.Instance.QuizId = int.Parse(context.Update.CallbackQuery!.Data!);
                     await quizList.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(Final)
@@ -113,9 +107,8 @@ internal class SearchPickingStateMachine : StateMachine<SearchPickingState>
         SetCompletedOnFinal();
     }
 
-    private static async Task RenderPage(BehaviorContext<SearchPickingState> context, int page)
+    private static async Task RenderPage(BehaviorContext<SearchPickingState> context, int page, QuizListMessage quizList)
     {
-        var quizList = context.ServiceProvider.GetRequiredService<QuizListMessage>();
         var pageQuizzes = context.Instance.Quizzes
             .Where(x => x.Page == page).Select(x => x.Quiz).ToArray();
         await quizList.Apply(context.Update.GetChatId(), pageQuizzes);
