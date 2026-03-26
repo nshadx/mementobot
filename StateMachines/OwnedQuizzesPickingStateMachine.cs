@@ -5,7 +5,7 @@ using mementobot.Telegram.StateMachine;
 
 namespace mementobot.StateMachines;
 
-internal class FavoritesPickingState
+internal class OwnedQuizzesPickingState
 {
     public List<QuizPage> Quizzes { get; set; } = [];
     public int Page { get; set; }
@@ -14,15 +14,15 @@ internal class FavoritesPickingState
     public int CurrentState { get; set; }
 }
 
-internal class FavoritesPickingStateMachine : StateMachine<FavoritesPickingState>
+internal class OwnedQuizzesPickingStateMachine : StateMachine<OwnedQuizzesPickingState>
 {
     public Event PageForwardEvent { get; private set; } = null!;
     public Event PageBackwardEvent { get; private set; } = null!;
     public Event QuizPickedEvent { get; private set; } = null!;
 
-    public State<FavoritesPickingState> QuizPicking { get; private set; } = null!;
+    public State<OwnedQuizzesPickingState> QuizPicking { get; private set; } = null!;
 
-    public FavoritesPickingStateMachine()
+    public OwnedQuizzesPickingStateMachine()
     {
         ConfigureEvent(() => PageForwardEvent, update => update.CallbackQuery?.Data is "forward");
         ConfigureEvent(() => PageBackwardEvent, update => update.CallbackQuery?.Data is "backward");
@@ -40,7 +40,7 @@ internal class FavoritesPickingStateMachine : StateMachine<FavoritesPickingState
 
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(telegramId: chatId);
-                    var quizzes = quizService.GetFavoriteQuizzes(userId: userId);
+                    var quizzes = quizService.GetOwnedQuizzes(userId: userId);
 
                     var list = context.Instance.Quizzes;
                     var counter = 1;
@@ -93,7 +93,7 @@ internal class FavoritesPickingStateMachine : StateMachine<FavoritesPickingState
         SetCompletedOnFinal();
     }
 
-    private static async Task RenderPage(BehaviorContext<FavoritesPickingState> context, int page)
+    private static async Task RenderPage(BehaviorContext<OwnedQuizzesPickingState> context, int page)
     {
         var quizList = context.ServiceProvider.GetRequiredService<QuizListMessage>();
         var pageQuizzes = context.Instance.Quizzes

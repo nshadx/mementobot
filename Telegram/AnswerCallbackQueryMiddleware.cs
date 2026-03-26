@@ -6,11 +6,14 @@ internal class AnswerCallbackQueryMiddleware(ITelegramBotClient client) : IMiddl
 {
     public async Task Handle(Context context, UpdateDelegate next)
     {
-        if (context.Update.CallbackQuery is { } callbackQuery)
-        {
-            await client.AnswerCallbackQuery(callbackQuery.Id);
-        }
-
         await next(context);
+
+        if (context.Update.CallbackQuery is not { } callbackQuery)
+            return;
+
+        if (!context.IsHandled && callbackQuery.Message is { } msg)
+            await client.DeleteMessage(msg.Chat.Id, msg.Id);
+
+        await client.AnswerCallbackQuery(callbackQuery.Id);
     }
 }

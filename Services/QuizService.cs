@@ -37,6 +37,16 @@ internal class QuizService(
         }
     }
 
+    public bool IsOwnedBy(int userId, int quizId, SqliteTransaction? transaction = null)
+    {
+        SqliteCommand command = new("""
+            SELECT COUNT(1) FROM quizzes WHERE id = @quiz_id AND user_id = @user_id
+            """, connection, transaction);
+        command.Parameters.AddWithValue("@user_id", userId);
+        command.Parameters.AddWithValue("@quiz_id", quizId);
+        return (long)command.ExecuteScalar()! > 0;
+    }
+
     public IEnumerable<Quiz> GetQuizzes(bool published, int? userId = null, SqliteTransaction? transaction = null)
     {
         SqliteCommand command = new("""
@@ -71,7 +81,7 @@ internal class QuizService(
         
         command.ExecuteNonQuery();
     }
-    
+
     public bool IsInFavorites(int userId, int quizId, SqliteTransaction? transaction = null)
     {
         SqliteCommand command = new("""
@@ -215,6 +225,29 @@ internal class QuizService(
                 LastPlayed: DateTime.Parse(reader.GetString(2)),
                 AvgScore: reader.GetDouble(3)
             );
+        }
+    }
+
+    public bool IsPublished(int quizId, SqliteTransaction? transaction = null)
+    {
+        SqliteCommand command = new("""
+            SELECT is_published FROM quizzes WHERE id = @quiz_id
+            """, connection, transaction);
+        command.Parameters.AddWithValue("@quiz_id", quizId);
+        var result = command.ExecuteScalar();
+        return result is not null && (long)result != 0;
+    }
+
+    public IEnumerable<Quiz> GetOwnedQuizzes(int userId, SqliteTransaction? transaction = null)
+    {
+        SqliteCommand command = new("""
+            SELECT id, name FROM quizzes WHERE user_id = @user_id ORDER BY id DESC
+            """, connection, transaction);
+        command.Parameters.AddWithValue("@user_id", userId);
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            yield return new Quiz { Id = reader.GetInt32(0), Name = reader.GetString(1) };
         }
     }
 

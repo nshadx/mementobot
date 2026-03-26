@@ -26,6 +26,7 @@ internal class RouterMiddleware(IServiceProvider provider, IEnumerable<Route> ro
 
         if (handled)
         {
+            context.IsHandled = true;
             await next(context);
         }
     }

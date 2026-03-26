@@ -1,5 +1,6 @@
 using Hangfire;
 using mementobot.Services;
+using mementobot.Services.Messages;
 using mementobot.Services.Reminders;
 
 namespace mementobot.Jobs;
@@ -8,7 +9,7 @@ internal class MotivationSpeechJob(
     QuizService quizService,
     UserService userService,
     IMotivationEngine motivationEngine,
-    MessageManager messageManager,
+    ReminderSpeechMessage reminderSpeechMessage,
     IBackgroundJobClient jobClient
 )
 {
@@ -32,7 +33,7 @@ internal class MotivationSpeechJob(
             return;
 
         var speech = speeches[speechIndex];
-        await messageManager.SendReminderSpeech(telegramId, speech.Text);
+        await reminderSpeechMessage.Apply(telegramId, speech.Text);
 
         if (speechIndex + 1 < speeches.Count)
         {

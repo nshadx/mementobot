@@ -1,4 +1,5 @@
 using mementobot.Services;
+using mementobot.Services.Messages;
 using mementobot.Telegram;
 using mementobot.Telegram.StateMachine;
 
@@ -6,11 +7,9 @@ namespace mementobot.StateMachines;
 
 internal class SettingsMenuState
 {
-    public int MenuMessageId { get; set; }
-    public bool RemindersEnabled { get; set; }
-    public bool AdultContent { get; set; }
     public ReminderTimeState ReminderTimeState { get; set; } = null!;
     public TemperatureState TemperatureState { get; set; } = null!;
+
     public int CurrentState { get; set; }
 }
 
@@ -43,16 +42,10 @@ internal class SettingsMenuStateMachine : StateMachine<SettingsMenuState>
                 .Then(async context =>
                 {
                     var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+                    var settingsMenu = context.ServiceProvider.GetRequiredService<SettingsMenuMessage>();
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(chatId);
-                    var settings = userService.GetUserSettings(userId);
-
-                    context.Instance.RemindersEnabled = settings.RemindersEnabled;
-                    context.Instance.AdultContent = settings.AdultContent;
-
-                    var messageId = await messageManager.SendSettingsMenu(chatId, settings);
-                    context.Instance.MenuMessageId = messageId;
+                    await settingsMenu.Apply(chatId, userService.GetUserSettings(userId));
                 })
                 .TransitionTo(WaitingAction),
             Ignore(ToggleRemindersEvent),
@@ -66,29 +59,23 @@ internal class SettingsMenuStateMachine : StateMachine<SettingsMenuState>
                 .Then(async context =>
                 {
                     var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+                    var settingsMenu = context.ServiceProvider.GetRequiredService<SettingsMenuMessage>();
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(chatId);
-
-                    context.Instance.RemindersEnabled = !context.Instance.RemindersEnabled;
-                    userService.UpdateRemindersEnabled(userId, context.Instance.RemindersEnabled);
-
                     var settings = userService.GetUserSettings(userId);
-                    await messageManager.EditSettingsMenu(chatId, context.Instance.MenuMessageId, settings);
+                    userService.UpdateRemindersEnabled(userId, !settings.RemindersEnabled);
+                    await settingsMenu.Apply(chatId, settings with { RemindersEnabled = !settings.RemindersEnabled });
                 }),
             When(ToggleAdultContentEvent)
                 .Then(async context =>
                 {
                     var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+                    var settingsMenu = context.ServiceProvider.GetRequiredService<SettingsMenuMessage>();
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(chatId);
-
-                    context.Instance.AdultContent = !context.Instance.AdultContent;
-                    userService.UpdateAdultContent(userId, context.Instance.AdultContent);
-
                     var settings = userService.GetUserSettings(userId);
-                    await messageManager.EditSettingsMenu(chatId, context.Instance.MenuMessageId, settings);
+                    userService.UpdateAdultContent(userId, !settings.AdultContent);
+                    await settingsMenu.Apply(chatId, settings with { AdultContent = !settings.AdultContent });
                 }),
             When(SetReminderHourEvent)
                 .TransitionTo(reminderTimeStateMachine, reminderTimeStateMachine.Initial),
@@ -100,16 +87,10 @@ internal class SettingsMenuStateMachine : StateMachine<SettingsMenuState>
             .Then(async context =>
             {
                 var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+                var settingsMenu = context.ServiceProvider.GetRequiredService<SettingsMenuMessage>();
                 var chatId = context.Update.GetChatId();
                 var userId = userService.GetOrCreateUser(chatId);
-                var settings = userService.GetUserSettings(userId);
-
-                context.Instance.RemindersEnabled = settings.RemindersEnabled;
-                context.Instance.AdultContent = settings.AdultContent;
-
-                var messageId = await messageManager.SendSettingsMenu(chatId, settings);
-                context.Instance.MenuMessageId = messageId;
+                await settingsMenu.Apply(chatId, userService.GetUserSettings(userId));
             })
             .TransitionTo(WaitingAction);
 
@@ -117,16 +98,10 @@ internal class SettingsMenuStateMachine : StateMachine<SettingsMenuState>
             .Then(async context =>
             {
                 var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+                var settingsMenu = context.ServiceProvider.GetRequiredService<SettingsMenuMessage>();
                 var chatId = context.Update.GetChatId();
                 var userId = userService.GetOrCreateUser(chatId);
-                var settings = userService.GetUserSettings(userId);
-
-                context.Instance.RemindersEnabled = settings.RemindersEnabled;
-                context.Instance.AdultContent = settings.AdultContent;
-
-                var messageId = await messageManager.SendSettingsMenu(chatId, settings);
-                context.Instance.MenuMessageId = messageId;
+                await settingsMenu.Apply(chatId, userService.GetUserSettings(userId));
             })
             .TransitionTo(WaitingAction);
     }

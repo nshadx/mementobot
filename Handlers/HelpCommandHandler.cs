@@ -1,13 +1,21 @@
-using mementobot.Services;
+using mementobot.Services.Messages;
 using mementobot.Telegram;
 
 namespace mementobot.Handlers;
 
-internal class HelpCommandHandler(MessageManager messageManager) : IRouteHandler
+internal class HelpCommandHandler(
+    HelpMessage helpMessage,
+    HelpGraphMessage helpGraphMessage
+) : IRouteHandler
 {
-    public async Task Handle(Context context)
+    public Task Handle(Context context)
     {
+        var text = context.Update.Message?.Text ?? "";
         var chatId = context.Update.GetChatId();
-        await messageManager.SendHelpMessage(chatId: chatId);
+
+        if (CommandArgumentParser.TryGetArgument<string>("/help", text, 0, out var arg) && arg == "graph")
+            return helpGraphMessage.Apply(chatId);
+
+        return helpMessage.Apply(chatId);
     }
 }

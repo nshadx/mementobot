@@ -1,4 +1,5 @@
 using mementobot.Services;
+using mementobot.Services.Messages;
 using mementobot.Telegram;
 using mementobot.Telegram.StateMachine;
 
@@ -7,8 +8,7 @@ namespace mementobot.StateMachines;
 internal class QuizActionMenuState
 {
     public int QuizId { get; set; }
-    public int MenuMessageId { get; set; }
-    public bool IsFavorited { get; set; }
+    public string? ShareLink { get; set; }
 
     public int CurrentState { get; set; }
 }
@@ -33,14 +33,19 @@ internal class QuizActionMenuStateMachine : StateMachine<QuizActionMenuState>
                 {
                     var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
                     var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+                    var quizActionMenu = context.ServiceProvider.GetRequiredService<QuizActionMenuMessage>();
 
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(telegramId: chatId);
-                    var isFavorited = quizService.IsInFavorites(userId: userId, quizId: context.Instance.QuizId);
+                    var isOwned = quizService.IsOwnedBy(userId: userId, quizId: context.Instance.QuizId);
+                    var isFavorited = !isOwned && quizService.IsInFavorites(userId: userId, quizId: context.Instance.QuizId);
 
-                    var messageId = await messageManager.SendQuizActionMenu(chatId: chatId, isFavorited: isFavorited);
-                    context.Instance.MenuMessageId = messageId;
+                    var isPublished = quizService.IsPublished(quizId: context.Instance.QuizId);
+                    context.Instance.ShareLink = isPublished
+                        ? $"https://t.me/nshadx_mementobot?start={context.Instance.QuizId}"
+                        : null;
+
+                    await quizActionMenu.Apply(chatId, new(isFavorited, isOwned, context.Instance.ShareLink));
                 })
                 .TransitionTo(WaitingAction),
             Ignore(PlaySelectedEvent),
@@ -51,8 +56,8 @@ internal class QuizActionMenuStateMachine : StateMachine<QuizActionMenuState>
             When(PlaySelectedEvent)
                 .Then(async context =>
                 {
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-                    await messageManager.DeleteMessage(context.Update.GetChatId(), context.Instance.MenuMessageId);
+                    var quizActionMenu = context.ServiceProvider.GetRequiredService<QuizActionMenuMessage>();
+                    await quizActionMenu.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(Final),
             When(ToggleFavoriteEvent)
@@ -60,23 +65,18 @@ internal class QuizActionMenuStateMachine : StateMachine<QuizActionMenuState>
                 {
                     var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
                     var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+                    var quizActionMenu = context.ServiceProvider.GetRequiredService<QuizActionMenuMessage>();
 
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(telegramId: chatId);
 
-                    if (context.Instance.IsFavorited)
+                    var isFavorited = quizService.IsInFavorites(userId: userId, quizId: context.Instance.QuizId);
+                    if (isFavorited)
                         quizService.RemoveFromFavorites(userId: userId, quizId: context.Instance.QuizId);
                     else
                         quizService.AddToFavorites(userId: userId, quizId: context.Instance.QuizId);
 
-                    context.Instance.IsFavorited = !context.Instance.IsFavorited;
-
-                    await messageManager.EditQuizActionMenu(
-                        chatId: chatId,
-                        messageId: context.Instance.MenuMessageId,
-                        isFavorited: context.Instance.IsFavorited
-                    );
+                    await quizActionMenu.Apply(chatId, new(!isFavorited, IsOwned: false, context.Instance.ShareLink));
                 })
         );
 

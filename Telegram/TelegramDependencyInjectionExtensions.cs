@@ -20,11 +20,11 @@ internal static class TelegramDependencyInjectionExtensions
                 .AddTypedClient<ITelegramBotClient>((httpClient, _) => new TelegramBotClient(config.Token, httpClient));
             services.AddHostedService<PollingService>();
             services.AddScoped<IUpdateHandler, UpdateHandler>();
+            services.AddScoped<IContextAccessor, ContextAccessor>();
             services.AddScoped<BehaviorContextFactory>();
             services.AddScoped<ISessionStore, MemorySessionStore>();
             services.AddMemoryCache();
             services.AddSingleton<TelegramFileService>();
-            services.AddSingleton<MessageManager>();
 
             return services;
         }

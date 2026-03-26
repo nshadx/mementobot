@@ -1,4 +1,5 @@
 using mementobot.Services;
+using mementobot.Services.Messages;
 using mementobot.Telegram;
 using mementobot.Telegram.StateMachine;
 
@@ -10,7 +11,6 @@ internal class AddQuizQuestionState
 
     public string Question { get; set; } = null!;
     public string Answer { get; set; } = null!;
-    public int MessageId { get; set; }
 
     public int CurrentState { get; set; }
 }
@@ -47,47 +47,37 @@ internal class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
         When(quizPickingStateMachine, quizPickingStateMachine.QuizPickedEvent)
             .Then(async context =>
             {
-                var chatId = context.Update.GetChatId();
-                var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-                var messageId = await messageManager.EnterQuestionMessage(
-                    chatId: chatId
-                );
-                context.Instance.MessageId = messageId;
+                var prompt = context.ServiceProvider.GetRequiredService<AddQuizQuestionMessage>();
+                await prompt.ApplyInputQuestion(context.Update.GetChatId());
             })
             .TransitionTo(FillingQuestion);
 
         During(FillingQuestion,
             When(MessageReceivedEvent)
-                .Then(context =>
-                {
-                    context.Instance.Question = context.Update.Message?.Text!;
-                    return Task.CompletedTask;
-                })
                 .Then(async context =>
                 {
+                    context.Instance.Question = context.Update.Message!.Text!;
+
+                    var prompt = context.ServiceProvider.GetRequiredService<AddQuizQuestionMessage>();
                     var chatId = context.Update.GetChatId();
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-                    await messageManager.DeleteMessage(chatId, context.Instance.MessageId);
-                    await messageManager.DeleteMessage(chatId, context.Update.Message!.MessageId);
-                    var messageId = await messageManager.EnterAnswerMessage(chatId: chatId);
-                    context.Instance.MessageId = messageId;
+
+                    context.ServiceProvider.GetRequiredService<IContextAccessor>().Current.DeleteUserMessage = true;
+                    await prompt.ApplyInputAnswer(chatId);
                 })
                 .TransitionTo(FillingAnswer)
         );
 
         During(FillingAnswer,
             When(MessageReceivedEvent)
-                .Then(context =>
-                {
-                    context.Instance.Answer = context.Update.Message?.Text!;
-                    return Task.CompletedTask;
-                })
                 .Then(async context =>
                 {
+                    context.Instance.Answer = context.Update.Message!.Text!;
+
+                    var prompt = context.ServiceProvider.GetRequiredService<AddQuizQuestionMessage>();
                     var chatId = context.Update.GetChatId();
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-                    await messageManager.DeleteMessage(chatId, context.Instance.MessageId);
-                    await messageManager.DeleteMessage(chatId, context.Update.Message!.MessageId);
+
+                    context.ServiceProvider.GetRequiredService<IContextAccessor>().Current.DeleteUserMessage = true;
+                    await prompt.Delete(chatId);
                 })
                 .TransitionTo(Final)
         );
@@ -95,21 +85,14 @@ internal class AddQuizQuestionStateMachine : StateMachine<AddQuizQuestionState>
         Finally(x => x.Then(async context =>
         {
             var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
-            var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-
-            var quizId = context.Instance.QuizPickingState.QuizId;
-            var question = context.Instance.Question;
-            var answer = context.Instance.Answer;
+            var questionAddedMessage = context.ServiceProvider.GetRequiredService<QuestionAddedMessage>();
 
             quizService.AddQuizQuestion(
-                quizId: quizId,
-                question: question,
-                answer: answer
-            );
+                quizId: context.Instance.QuizPickingState.QuizId,
+                question: context.Instance.Question,
+                answer: context.Instance.Answer);
 
-            await messageManager.SendQuestionAddedMessage(
-                chatId: context.Update.GetChatId()
-            );
+            await questionAddedMessage.Apply(context.Update.GetChatId());
         }));
 
         SetCompletedOnFinal();

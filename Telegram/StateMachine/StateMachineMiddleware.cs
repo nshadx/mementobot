@@ -20,6 +20,8 @@ internal class StateMachineMiddleware(
             sessionStore.Remove(chatId);
         }
 
+        context.IsHandled = true;
+
         if (await behaviorContext.Raise())
         {
             sessionStore.Remove(chatId);

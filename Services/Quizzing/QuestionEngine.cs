@@ -98,6 +98,7 @@ internal interface IQuizSessionStatistics
 {
     int TotalQuestions(QuestionQueue queue);
     int Answered(QuestionQueue queue);
+    int Skipped(QuestionQueue queue);
     int Remaining(QuestionQueue queue);
     double AverageScore(QuestionQueue queue);
     IReadOnlyList<QuestionAttempt> GetAttempts(QuestionQueue queue, int questionId);

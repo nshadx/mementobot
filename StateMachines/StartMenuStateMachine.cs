@@ -1,4 +1,5 @@
 using mementobot.Services;
+using mementobot.Services.Messages;
 using mementobot.Telegram;
 using mementobot.Telegram.StateMachine;
 
@@ -12,7 +13,6 @@ internal class StartMenuState
     public SearchPickingState SearchPickingState { get; set; } = null!;
     public QuizActionMenuState QuizActionMenuState { get; set; } = null!;
 
-    public int MenuMessageId { get; set; }
     public int CurrentState { get; set; }
 }
 
@@ -64,9 +64,8 @@ internal class StartMenuStateMachine : StateMachine<StartMenuState>
             When(MenuStartEvent)
                 .Then(async context =>
                 {
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-                    var messageId = await messageManager.SendStartMenu(context.Update.GetChatId());
-                    context.Instance.MenuMessageId = messageId;
+                    var startMenu = context.ServiceProvider.GetRequiredService<StartMenuMessage>();
+                    await startMenu.Apply(context.Update.GetChatId());
                 })
                 .TransitionTo(Menu),
             Ignore(FavoritesSelectedEvent),
@@ -78,22 +77,22 @@ internal class StartMenuStateMachine : StateMachine<StartMenuState>
             When(FavoritesSelectedEvent)
                 .Then(async context =>
                 {
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-                    await messageManager.DeleteMessage(context.Update.GetChatId(), context.Instance.MenuMessageId);
+                    var startMenu = context.ServiceProvider.GetRequiredService<StartMenuMessage>();
+                    await startMenu.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(favoritesPickingStateMachine, favoritesPickingStateMachine.Initial),
             When(RecentSelectedEvent)
                 .Then(async context =>
                 {
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-                    await messageManager.DeleteMessage(context.Update.GetChatId(), context.Instance.MenuMessageId);
+                    var startMenu = context.ServiceProvider.GetRequiredService<StartMenuMessage>();
+                    await startMenu.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(recentPickingStateMachine, recentPickingStateMachine.Initial),
             When(SearchSelectedEvent)
                 .Then(async context =>
                 {
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-                    await messageManager.DeleteMessage(context.Update.GetChatId(), context.Instance.MenuMessageId);
+                    var startMenu = context.ServiceProvider.GetRequiredService<StartMenuMessage>();
+                    await startMenu.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(searchPickingStateMachine, searchPickingStateMachine.Initial)
         );

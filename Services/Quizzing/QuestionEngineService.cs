@@ -55,7 +55,8 @@ internal class QuestionEngineService(IRequeuingStrategy requeuingStrategy) : IQu
     public int TotalQuestions(QuestionQueue queue)
     {
         var fromAttempts = queue.Attempts.Select(a => a.QuestionId);
-        return fromAttempts.Concat(queue.QuestionIds).Distinct().Count();
+        var fromSkipped = queue.SkipCounts.Keys;
+        return fromAttempts.Concat(queue.QuestionIds).Concat(fromSkipped).Distinct().Count();
     }
 
     public int Answered(QuestionQueue queue) =>
@@ -63,6 +64,10 @@ internal class QuestionEngineService(IRequeuingStrategy requeuingStrategy) : IQu
             .Select(a => a.QuestionId)
             .Distinct()
             .Count(id => !queue.QuestionIds.Contains(id));
+
+    public int Skipped(QuestionQueue queue) =>
+        queue.SkipCounts.Keys
+            .Count(id => !queue.Attempts.Any(a => a.QuestionId == id) && !queue.QuestionIds.Contains(id));
 
     public int Remaining(QuestionQueue queue) =>
         queue.QuestionIds.Distinct().Count();

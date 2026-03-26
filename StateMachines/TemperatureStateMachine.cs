@@ -1,4 +1,5 @@
 using mementobot.Services;
+using mementobot.Services.Messages;
 using mementobot.Telegram;
 using mementobot.Telegram.StateMachine;
 
@@ -6,7 +7,6 @@ namespace mementobot.StateMachines;
 
 internal class TemperatureState
 {
-    public int PromptMessageId { get; set; }
     public int CurrentState { get; set; }
 }
 
@@ -25,9 +25,8 @@ internal class TemperatureStateMachine : StateMachine<TemperatureState>
             When(Initial.Enter)
                 .Then(async context =>
                 {
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
-                    var messageId = await messageManager.SendTemperaturePrompt(context.Update.GetChatId());
-                    context.Instance.PromptMessageId = messageId;
+                    var prompt = context.ServiceProvider.GetRequiredService<TemperaturePromptMessage>();
+                    await prompt.Apply(context.Update.GetChatId(), false);
                 })
                 .TransitionTo(WaitingInput),
             Ignore(MessageReceivedEvent)
@@ -39,14 +38,13 @@ internal class TemperatureStateMachine : StateMachine<TemperatureState>
                 {
                     var text = context.Update.Message!.Text!.Trim();
                     var chatId = context.Update.GetChatId();
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+                    var prompt = context.ServiceProvider.GetRequiredService<TemperaturePromptMessage>();
+
+                    context.ServiceProvider.GetRequiredService<IContextAccessor>().Current.DeleteUserMessage = true;
 
                     if (!int.TryParse(text, out var temperature) || temperature < 0 || temperature > 100)
                     {
-                        await messageManager.DeleteMessage(chatId, context.Update.Message!.MessageId);
-                        await messageManager.DeleteMessage(chatId, context.Instance.PromptMessageId);
-                        var newId = await messageManager.SendTemperaturePrompt(chatId, isError: true);
-                        context.Instance.PromptMessageId = newId;
+                        await prompt.Apply(chatId, true);
                         return;
                     }
 
@@ -54,9 +52,7 @@ internal class TemperatureStateMachine : StateMachine<TemperatureState>
                     var userId = userService.GetOrCreateUser(chatId);
                     userService.UpdateTemperature(userId, temperature);
 
-                    await messageManager.DeleteMessage(chatId, context.Update.Message!.MessageId);
-                    await messageManager.DeleteMessage(chatId, context.Instance.PromptMessageId);
-
+                    await prompt.Delete(chatId);
                     await context.TransitionTo(Final);
                 })
         );

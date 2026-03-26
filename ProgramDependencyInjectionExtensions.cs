@@ -34,6 +34,8 @@ internal static class ProgramDependencyInjectionExtensions
             services.AddStateMachine<ReminderTimeStateMachine, ReminderTimeState>();
             services.AddStateMachine<TemperatureStateMachine, TemperatureState>();
             services.AddStateMachine<SettingsMenuStateMachine, SettingsMenuState>();
+            services.AddStateMachine<OwnedQuizzesPickingStateMachine, OwnedQuizzesPickingState>();
+            services.AddStateMachine<MyQuizzesStateMachine, MyQuizzesState>();
 
             return services;
         }
@@ -44,6 +46,7 @@ internal static class ProgramDependencyInjectionExtensions
             {
                 x.Use<AnswerCallbackQueryMiddleware>();
                 x.Use<DeleteCommandMiddleware>();
+                x.Use<DeleteUserMessageMiddleware>();
                 x.Use<StateMachineMiddleware>();
                 x.Use<RouterMiddleware>();
             });

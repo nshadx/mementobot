@@ -1,11 +1,14 @@
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
+using mementobot.Telegram.Messages;
 
 namespace mementobot.Telegram;
 
 internal class UpdateHandler(
     UpdateDelegate pipeline,
+    IMessageStore messageStore,
+    IContextAccessor contextAccessor,
     ILogger<UpdateHandler> logger
 ) : IUpdateHandler
 {
@@ -27,6 +30,12 @@ internal class UpdateHandler(
     )
     {
         logger.LogInformation("Received: {updateType}", update.Type);
-        return pipeline(new Context(update));
+
+        if (update.Message is { } msg)
+            messageStore.TrackMessageId(msg.Chat.Id, msg.Id);
+
+        var context = new Context(update);
+        contextAccessor.Current = context;
+        return pipeline(context);
     }
 }

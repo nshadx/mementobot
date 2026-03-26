@@ -1,4 +1,5 @@
 using mementobot.Services;
+using mementobot.Services.Messages;
 using mementobot.Telegram;
 using mementobot.Telegram.StateMachine;
 
@@ -7,7 +8,6 @@ namespace mementobot.StateMachines;
 internal class RecentPickingState
 {
     public List<QuizPage> Quizzes { get; set; } = [];
-    public int MessageId { get; set; }
     public int Page { get; set; }
     public int QuizId { get; set; }
 
@@ -36,7 +36,7 @@ internal class RecentPickingStateMachine : StateMachine<RecentPickingState>
                 {
                     var quizService = context.ServiceProvider.GetRequiredService<QuizService>();
                     var userService = context.ServiceProvider.GetRequiredService<UserService>();
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+                    var quizList = context.ServiceProvider.GetRequiredService<QuizListMessage>();
 
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(telegramId: chatId);
@@ -48,26 +48,15 @@ internal class RecentPickingStateMachine : StateMachine<RecentPickingState>
                     context.Instance.Page = 1;
                     foreach (var quiz in quizzes)
                     {
-                        if (counter <= 6)
-                        {
-                            list.Add(new QuizPage(quiz, page));
-                            counter++;
-                        }
-                        else
-                        {
-                            page++;
-                            counter = 1;
-                        }
+                        if (counter <= 6) { list.Add(new QuizPage(quiz, page)); counter++; }
+                        else { page++; counter = 1; }
                     }
 
                     var firstPage = list.Where(x => x.Page == 1).Select(x => x.Quiz).ToArray();
-                    var messageId = await messageManager.SelectPollMessage(chatId: chatId, quizzes: firstPage);
-                    context.Instance.MessageId = messageId;
+                    await quizList.Apply(chatId, firstPage);
 
                     if (list.Count == 0)
-                    {
                         context.IsCompleted = true;
-                    }
                 })
                 .TransitionTo(QuizPicking),
             Ignore(QuizPickedEvent),
@@ -80,25 +69,23 @@ internal class RecentPickingStateMachine : StateMachine<RecentPickingState>
                 .Then(async context =>
                 {
                     var page = context.Instance.Page;
-                    if (++page > context.Instance.Quizzes.Max(x => x.Page))
-                        return;
+                    if (++page > context.Instance.Quizzes.Max(x => x.Page)) return;
                     await RenderPage(context, page);
                 }),
             When(PageBackwardEvent)
                 .Then(async context =>
                 {
                     var page = context.Instance.Page;
-                    if (--page < context.Instance.Quizzes.Min(x => x.Page))
-                        return;
+                    if (--page < context.Instance.Quizzes.Min(x => x.Page)) return;
                     await RenderPage(context, page);
                 }),
             When(QuizPickedEvent)
                 .Then(async context =>
                 {
-                    var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+                    var quizList = context.ServiceProvider.GetRequiredService<QuizListMessage>();
                     var quizId = int.Parse(context.Update.CallbackQuery!.Data!);
                     context.Instance.QuizId = quizId;
-                    await messageManager.DeleteMessage(context.Update.GetChatId(), context.Instance.MessageId);
+                    await quizList.Delete(context.Update.GetChatId());
                 })
                 .TransitionTo(Final)
         );
@@ -108,18 +95,10 @@ internal class RecentPickingStateMachine : StateMachine<RecentPickingState>
 
     private static async Task RenderPage(BehaviorContext<RecentPickingState> context, int page)
     {
-        var messageManager = context.ServiceProvider.GetRequiredService<MessageManager>();
+        var quizList = context.ServiceProvider.GetRequiredService<QuizListMessage>();
         var pageQuizzes = context.Instance.Quizzes
-            .Where(x => x.Page == page)
-            .Select(x => x.Quiz)
-            .ToArray();
-        var chatId = context.Update.GetChatId();
-        var messageId = await messageManager.SelectPollMessage(
-            chatId: chatId,
-            quizzes: pageQuizzes,
-            editMessageId: context.Instance.MessageId
-        );
-        context.Instance.MessageId = messageId;
+            .Where(x => x.Page == page).Select(x => x.Quiz).ToArray();
+        await quizList.Apply(context.Update.GetChatId(), pageQuizzes);
         context.Instance.Page = page;
     }
 }
