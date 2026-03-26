@@ -5,11 +5,9 @@ using Telegram.Bot.Types.Enums;
 namespace mementobot.Services.Messages;
 
 internal class HelpMessage(ITelegramBotClient client, IMessageStore store)
-    : BotMessage<bool>(client, store)
+    : BotMessage(client, store)
 {
-    public Task Apply(long chatId) => Apply(chatId, false);
-
-    protected override async Task<int> Send(long chatId, bool _)
+    protected override async Task<int> Send(long chatId)
     {
         var msg = await client.SendMessage(
             chatId,
