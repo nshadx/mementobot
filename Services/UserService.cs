@@ -1,97 +1,71 @@
-﻿using Microsoft.Data.Sqlite;
+using Dapper;
+using Microsoft.Data.Sqlite;
 
 namespace mementobot.Services;
 
-internal record UserSettings(bool RemindersEnabled, int ReminderHour, int Temperature, bool AdultContent);
-
-internal class UserService(
-    SqliteConnection connection
-)
+internal class UserSettings
 {
-    public IEnumerable<(int Id, long TelegramId)> GetAllUsers(SqliteTransaction? transaction = null)
+    public bool RemindersEnabled { get; set; }
+    public int ReminderHour { get; set; }
+    public int Temperature { get; set; }
+    public bool AdultContent { get; set; }
+}
+
+internal class UserService(SqliteConnection connection)
+{
+    private class UserRow
     {
-        SqliteCommand command = new("SELECT id, telegram_id FROM users", connection, transaction);
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
-        {
-            yield return (reader.GetInt32(0), reader.GetInt64(1));
-        }
+        public int Id { get; set; }
+        public long TelegramId { get; set; }
     }
 
-    public int GetOrCreateUser(long telegramId, SqliteTransaction? transaction = null)
-    {
-        SqliteCommand command = new("""
-                                    INSERT INTO users (telegram_id)
-                                    VALUES (@telegram_id)
-                                    ON CONFLICT(telegram_id) DO UPDATE SET
-                                        telegram_id = excluded.telegram_id
-                                    RETURNING id;
-                                    """, connection, transaction);
-        command.Parameters.AddWithValue("@telegram_id", telegramId);
+    public IEnumerable<(int Id, long TelegramId)> GetAllUsers(SqliteTransaction? transaction = null) =>
+        connection.Query<UserRow>(
+            "SELECT id AS Id, telegram_id AS TelegramId FROM users",
+            transaction: transaction)
+        .Select(r => (r.Id, r.TelegramId));
 
-        return (int)(long)command.ExecuteScalar()!;
-    }
+    public int GetOrCreateUser(long telegramId, SqliteTransaction? transaction = null) =>
+        connection.QuerySingle<int>("""
+            INSERT INTO users (telegram_id)
+            VALUES (@telegramId)
+            ON CONFLICT(telegram_id) DO UPDATE SET telegram_id = excluded.telegram_id
+            RETURNING id
+            """, new { telegramId }, transaction);
 
-    public UserSettings GetUserSettings(int userId, SqliteTransaction? transaction = null)
-    {
-        SqliteCommand command = new("""
-            SELECT reminders_enabled, reminder_hour, temperature, adult_content
-            FROM users WHERE id = @id
-            """, connection, transaction);
-        command.Parameters.AddWithValue("@id", userId);
-        using var reader = command.ExecuteReader();
-        reader.Read();
-        return new UserSettings(
-            RemindersEnabled: reader.GetBoolean(0),
-            ReminderHour: reader.GetInt32(1),
-            Temperature: reader.GetInt32(2),
-            AdultContent: reader.GetBoolean(3)
-        );
-    }
+    public UserSettings GetUserSettings(int userId, SqliteTransaction? transaction = null) =>
+        connection.QuerySingle<UserSettings>("""
+            SELECT reminders_enabled  AS RemindersEnabled,
+                   reminder_hour      AS ReminderHour,
+                   temperature        AS Temperature,
+                   adult_content      AS AdultContent
+            FROM users WHERE id = @userId
+            """, new { userId }, transaction);
 
-    public void UpdateRemindersEnabled(int userId, bool enabled, SqliteTransaction? transaction = null)
-    {
-        SqliteCommand command = new("UPDATE users SET reminders_enabled = @v WHERE id = @id", connection, transaction);
-        command.Parameters.AddWithValue("@v", enabled);
-        command.Parameters.AddWithValue("@id", userId);
-        command.ExecuteNonQuery();
-    }
+    public void UpdateRemindersEnabled(int userId, bool enabled, SqliteTransaction? transaction = null) =>
+        connection.Execute(
+            "UPDATE users SET reminders_enabled = @enabled WHERE id = @userId",
+            new { userId, enabled }, transaction);
 
-    public void UpdateReminderHour(int userId, int hour, SqliteTransaction? transaction = null)
-    {
-        SqliteCommand command = new("UPDATE users SET reminder_hour = @v WHERE id = @id", connection, transaction);
-        command.Parameters.AddWithValue("@v", hour);
-        command.Parameters.AddWithValue("@id", userId);
-        command.ExecuteNonQuery();
-    }
+    public void UpdateReminderHour(int userId, int hour, SqliteTransaction? transaction = null) =>
+        connection.Execute(
+            "UPDATE users SET reminder_hour = @hour WHERE id = @userId",
+            new { userId, hour }, transaction);
 
-    public void UpdateTemperature(int userId, int temperature, SqliteTransaction? transaction = null)
-    {
-        SqliteCommand command = new("UPDATE users SET temperature = @v WHERE id = @id", connection, transaction);
-        command.Parameters.AddWithValue("@v", temperature);
-        command.Parameters.AddWithValue("@id", userId);
-        command.ExecuteNonQuery();
-    }
+    public void UpdateTemperature(int userId, int temperature, SqliteTransaction? transaction = null) =>
+        connection.Execute(
+            "UPDATE users SET temperature = @temperature WHERE id = @userId",
+            new { userId, temperature }, transaction);
 
-    public void UpdateAdultContent(int userId, bool enabled, SqliteTransaction? transaction = null)
-    {
-        SqliteCommand command = new("UPDATE users SET adult_content = @v WHERE id = @id", connection, transaction);
-        command.Parameters.AddWithValue("@v", enabled);
-        command.Parameters.AddWithValue("@id", userId);
-        command.ExecuteNonQuery();
-    }
+    public void UpdateAdultContent(int userId, bool enabled, SqliteTransaction? transaction = null) =>
+        connection.Execute(
+            "UPDATE users SET adult_content = @enabled WHERE id = @userId",
+            new { userId, enabled }, transaction);
 
-    public IEnumerable<(int Id, long TelegramId)> GetUsersForReminder(int hour, SqliteTransaction? transaction = null)
-    {
-        SqliteCommand command = new("""
-            SELECT id, telegram_id FROM users
+    public IEnumerable<(int Id, long TelegramId)> GetUsersForReminder(int hour, SqliteTransaction? transaction = null) =>
+        connection.Query<UserRow>("""
+            SELECT id AS Id, telegram_id AS TelegramId FROM users
             WHERE reminders_enabled = 1 AND reminder_hour = @hour
-            """, connection, transaction);
-        command.Parameters.AddWithValue("@hour", hour);
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
-        {
-            yield return (reader.GetInt32(0), reader.GetInt64(1));
-        }
-    }
+            """, new { hour }, transaction)
+        .Select(r => (r.Id, r.TelegramId));
 }

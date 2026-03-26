@@ -59,8 +59,9 @@ internal class SettingsMenuStateMachine : StateMachine<SettingsMenuState>
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(chatId);
                     var settings = userService.GetUserSettings(userId);
-                    userService.UpdateRemindersEnabled(userId, !settings.RemindersEnabled);
-                    await settingsMenu.Apply(chatId, settings with { RemindersEnabled = !settings.RemindersEnabled });
+                    settings.RemindersEnabled = !settings.RemindersEnabled;
+                    userService.UpdateRemindersEnabled(userId, settings.RemindersEnabled);
+                    await settingsMenu.Apply(chatId, settings);
                 }),
             When(ToggleAdultContentEvent)
                 .Then(async (BehaviorContext<SettingsMenuState> context, UserService userService, SettingsMenuMessage settingsMenu) =>
@@ -68,8 +69,9 @@ internal class SettingsMenuStateMachine : StateMachine<SettingsMenuState>
                     var chatId = context.Update.GetChatId();
                     var userId = userService.GetOrCreateUser(chatId);
                     var settings = userService.GetUserSettings(userId);
-                    userService.UpdateAdultContent(userId, !settings.AdultContent);
-                    await settingsMenu.Apply(chatId, settings with { AdultContent = !settings.AdultContent });
+                    settings.AdultContent = !settings.AdultContent;
+                    userService.UpdateAdultContent(userId, settings.AdultContent);
+                    await settingsMenu.Apply(chatId, settings);
                 }),
             When(SetReminderHourEvent)
                 .TransitionTo(reminderTimeStateMachine, reminderTimeStateMachine.Initial),
