@@ -8,6 +8,8 @@ internal class Quiz
     public string Name { get; set; } = null!;
 }
 
+internal record QuizHistoryEntry(int QuizId, string QuizName, DateTime LastPlayed, double AvgScore);
+
 internal class QuizQuestion
 {
     public int Id { get; set; }
@@ -147,17 +149,73 @@ internal class QuizService(
         }
     }
 
-    public void RecordQuizHistory(int userId, int quizId, SqliteTransaction? transaction = null)
+    public void RecordQuizHistory(int userId, int quizId, double avgScore, SqliteTransaction? transaction = null)
     {
         SqliteCommand command = new("""
-            INSERT INTO quiz_history (user_id, quiz_id, last_played)
-            VALUES (@user_id, @quiz_id, @last_played)
-            ON CONFLICT(user_id, quiz_id) DO UPDATE SET last_played = excluded.last_played
+            INSERT INTO quiz_history (user_id, quiz_id, last_played, avg_score)
+            VALUES (@user_id, @quiz_id, @last_played, @avg_score)
+            ON CONFLICT(user_id, quiz_id) DO UPDATE SET
+                last_played = excluded.last_played,
+                avg_score   = excluded.avg_score
             """, connection, transaction);
         command.Parameters.AddWithValue("@user_id", userId);
         command.Parameters.AddWithValue("@quiz_id", quizId);
         command.Parameters.AddWithValue("@last_played", DateTime.UtcNow.ToString("O"));
+        command.Parameters.AddWithValue("@avg_score", avgScore);
         command.ExecuteNonQuery();
+    }
+
+    public bool WasQuizCompletedAfter(int userId, int quizId, DateTime since, SqliteTransaction? transaction = null)
+    {
+        SqliteCommand command = new("""
+            SELECT COUNT(1) FROM quiz_history
+            WHERE user_id = @user_id AND quiz_id = @quiz_id AND last_played > @since
+            """, connection, transaction);
+        command.Parameters.AddWithValue("@user_id", userId);
+        command.Parameters.AddWithValue("@quiz_id", quizId);
+        command.Parameters.AddWithValue("@since", since.ToString("O"));
+        return (long)command.ExecuteScalar()! > 0;
+    }
+
+    public QuizHistoryEntry? GetQuizHistoryEntry(int userId, int quizId, SqliteTransaction? transaction = null)
+    {
+        SqliteCommand command = new("""
+            SELECT q.id, q.name, h.last_played, h.avg_score
+            FROM quiz_history h
+            JOIN quizzes q ON q.id = h.quiz_id
+            WHERE h.user_id = @user_id AND h.quiz_id = @quiz_id
+            """, connection, transaction);
+        command.Parameters.AddWithValue("@user_id", userId);
+        command.Parameters.AddWithValue("@quiz_id", quizId);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return null;
+        return new QuizHistoryEntry(
+            QuizId: reader.GetInt32(0),
+            QuizName: reader.GetString(1),
+            LastPlayed: DateTime.Parse(reader.GetString(2)),
+            AvgScore: reader.GetDouble(3)
+        );
+    }
+
+    public IEnumerable<QuizHistoryEntry> GetQuizHistoryForUser(int userId, SqliteTransaction? transaction = null)
+    {
+        SqliteCommand command = new("""
+            SELECT q.id, q.name, h.last_played, h.avg_score
+            FROM quiz_history h
+            JOIN quizzes q ON q.id = h.quiz_id
+            WHERE h.user_id = @user_id
+            """, connection, transaction);
+        command.Parameters.AddWithValue("@user_id", userId);
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            yield return new QuizHistoryEntry(
+                QuizId: reader.GetInt32(0),
+                QuizName: reader.GetString(1),
+                LastPlayed: DateTime.Parse(reader.GetString(2)),
+                AvgScore: reader.GetDouble(3)
+            );
+        }
     }
 
     public void AddQuizQuestion(int quizId, string question, string answer)

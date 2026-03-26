@@ -1,6 +1,7 @@
 using System.Text;
 using mementobot.Services.Quizzing;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
@@ -149,6 +150,79 @@ internal class MessageManager(
             [new InlineKeyboardButton("▶️ Пройти", "action:play")],
             [favoriteButton]
         ]);
+    }
+
+    public async Task<int> SendSettingsMenu(long chatId, UserSettings settings)
+    {
+        var message = await client.SendMessage(
+            chatId: chatId,
+            text: "⚙️ *Настройки*",
+            parseMode: ParseMode.MarkdownV2,
+            replyMarkup: BuildSettingsKeyboard(settings)
+        );
+        return message.Id;
+    }
+
+    public async Task EditSettingsMenu(long chatId, int messageId, UserSettings settings)
+    {
+        try
+        {
+            await client.EditMessageReplyMarkup(
+                chatId: chatId,
+                messageId: messageId,
+                replyMarkup: BuildSettingsKeyboard(settings)
+            );
+        }
+        catch (ApiRequestException ex)
+            when (ex.Message.Contains("message is not modified")) { }
+    }
+
+    private static InlineKeyboardMarkup BuildSettingsKeyboard(UserSettings settings)
+    {
+        var remindersLabel = settings.RemindersEnabled ? "🔔 Напоминания: ВКЛ" : "🔕 Напоминания: ВЫКЛ";
+        var adultLabel = settings.AdultContent ? "🔞 Режим +18: ВКЛ" : "🔞 Режим +18: ВЫКЛ";
+
+        return new InlineKeyboardMarkup([
+            [new InlineKeyboardButton(remindersLabel, "settings:reminders")],
+            [new InlineKeyboardButton($"⏰ Время напоминания: {settings.ReminderHour}:00", "settings:hour")],
+            [new InlineKeyboardButton($"🌡 Температура: {settings.Temperature}/100", "settings:temperature")],
+            [new InlineKeyboardButton(adultLabel, "settings:adult")]
+        ]);
+    }
+
+    public async Task<int> SendReminderHourPrompt(long chatId, bool isError = false)
+    {
+        var text = isError
+            ? "❌ Неверное значение\\. Введи час от 0 до 23:"
+            : "⏰ Введи час напоминания \\(0–23\\):";
+        var message = await client.SendMessage(
+            chatId: chatId,
+            text: text,
+            parseMode: ParseMode.MarkdownV2
+        );
+        return message.Id;
+    }
+
+    public async Task<int> SendTemperaturePrompt(long chatId, bool isError = false)
+    {
+        var text = isError
+            ? "❌ Неверное значение\\. Введи температуру от 0 до 100:"
+            : "🌡 Введи температуру \\(0 — формальный, 100 — огненный\\):";
+        var message = await client.SendMessage(
+            chatId: chatId,
+            text: text,
+            parseMode: ParseMode.MarkdownV2
+        );
+        return message.Id;
+    }
+
+    public async Task SendReminderSpeech(long chatId, string markdownText)
+    {
+        await client.SendMessage(
+            chatId: chatId,
+            text: markdownText,
+            parseMode: ParseMode.MarkdownV2
+        );
     }
 
     public async Task<int> SendSearchPrompt(long chatId)

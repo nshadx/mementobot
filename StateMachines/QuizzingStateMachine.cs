@@ -119,7 +119,8 @@ internal class QuizzingStateMachine : StateMachine<QuizzingState>
 
             var chatId = context.Update.GetChatId();
             var userId = userService.GetOrCreateUser(telegramId: chatId);
-            quizService.RecordQuizHistory(userId: userId, quizId: context.Instance.QuizId);
+            var avgScore = statistics.AverageScore(context.Instance.Queue);
+            quizService.RecordQuizHistory(userId: userId, quizId: context.Instance.QuizId, avgScore: avgScore);
 
             _ = await messageManager.SendCompletedQuiz(
                 chatId: chatId,

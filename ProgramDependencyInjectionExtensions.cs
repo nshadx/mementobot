@@ -31,6 +31,9 @@ internal static class ProgramDependencyInjectionExtensions
             services.AddStateMachine<SearchPickingStateMachine, SearchPickingState>();
             services.AddStateMachine<QuizActionMenuStateMachine, QuizActionMenuState>();
             services.AddStateMachine<StartMenuStateMachine, StartMenuState>();
+            services.AddStateMachine<ReminderTimeStateMachine, ReminderTimeState>();
+            services.AddStateMachine<TemperatureStateMachine, TemperatureState>();
+            services.AddStateMachine<SettingsMenuStateMachine, SettingsMenuState>();
 
             return services;
         }
